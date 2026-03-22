@@ -10,15 +10,26 @@ from typing import Optional
 import httpx
 
 from .base import BaseCollector, RawSignal
-from monitor.config import SOURCES, REQUEST_DELAY_SECONDS
+from monitor.config import REQUEST_DELAY_SECONDS
 
 logger = logging.getLogger(__name__)
 
-_SEARCH_SLUGS = [
-    "injection-molding-machine",
-    "plastic-injection-machine",
-    "pet-preform-machine",
-]
+
+def _get_search_slugs() -> list[str]:
+    """Build tradekey search slugs from active industry keywords."""
+    from monitor.config import KEYWORDS_DIRECT
+    slugs = set()
+    skip = {"buy", "from", "china", "import", "wholesale", "supplier",
+            "needed", "wanted", "looking", "for", "bulk", "purchase", "求购", "采购"}
+    for kw in KEYWORDS_DIRECT[:6]:
+        words = kw.lower().replace('"', '').split()
+        meaningful = [w for w in words if w not in skip and len(w) > 2]
+        if meaningful:
+            slugs.add("-".join(meaningful[:3]))
+    return list(slugs) if slugs else ["injection-molding-machine"]
+
+
+_SEARCH_SLUGS_CACHE: list[str] | None = None
 
 _BASE_URL = "https://www.tradekey.com/buy-offers"
 
@@ -126,6 +137,7 @@ class TradeKeyCollector(BaseCollector):
     name: str = "tradekey"
 
     def __init__(self) -> None:
+        from monitor.config import SOURCES
         cfg = SOURCES.get("tradekey", {})
         self.enabled: bool = cfg.get("enabled", True)
         self.max_pages: int = cfg.get("max_pages", 2)
@@ -135,6 +147,7 @@ class TradeKeyCollector(BaseCollector):
             logger.info("TradeKey collector is disabled, skipping.")
             return []
 
+        search_slugs = _get_search_slugs()
         signals: list[RawSignal] = []
         now = datetime.now(timezone.utc).isoformat()
 
@@ -143,7 +156,7 @@ class TradeKeyCollector(BaseCollector):
             timeout=httpx.Timeout(30.0),
             follow_redirects=True,
         ) as client:
-            for slug in _SEARCH_SLUGS:
+            for slug in search_slugs:
                 slug_signals = await self._scrape_slug(client, slug, now)
                 signals.extend(slug_signals)
 

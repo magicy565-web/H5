@@ -19,6 +19,8 @@ from monitor.config import (
     LLM_FALLBACK_MODELS,
     LLM_MODEL,
     MIN_INTENT_SCORE,
+    get_active_profile,
+    get_active_industry,
 )
 
 logger = logging.getLogger(__name__)
@@ -70,16 +72,18 @@ def _flag_for(country: str) -> str:
 
 
 # ------------------------------------------------------------------
-# Prompt templates
+# Prompt templates — dynamically filled from active industry profile
 # ------------------------------------------------------------------
 
-_SYSTEM_PROMPT = (
-    "你是一位专业的注塑机外贸销售情报分析师。你的任务是分析从互联网上采集到的"
-    "潜在买家信号，判断其购买注塑机（injection molding machine）的意向强度，"
-    "并提取结构化信息。请严格按照要求返回 JSON。"
-)
+def _get_system_prompt() -> str:
+    profile = get_active_profile()
+    return profile.get("llm_system_prompt", "你是一位专业的外贸销售情报分析师。")
 
-_USER_PROMPT_TEMPLATE = """\
+
+def _get_user_prompt(count: int, signals_json: str) -> str:
+    profile = get_active_profile()
+    spec_hint = profile.get("llm_spec_field_hint", "提及的产品规格或需求细节")
+    return f"""\
 以下是 {count} 条从网上采集到的潜在买家信号，请逐条分析并返回一个 JSON 数组。
 
 每条分析结果必须包含以下字段：
@@ -87,7 +91,7 @@ _USER_PROMPT_TEMPLATE = """\
 - "buyer_country": 买家所在国家（英文）
 - "buyer_name": 买家名称（如可提取）
 - "buyer_type": 买家类型（终端工厂 / 贸易商 / 个人 / 未知）
-- "machine_specs": 提及的机器规格或需求细节
+- "machine_specs": {spec_hint}
 - "urgency": 紧急程度（immediate / short_term / long_term / none）
 - "summary_zh": 一句话中文摘要
 - "recommended_action": 建议动作（立即联系 / 持续跟踪 / 暂时忽略）
@@ -109,7 +113,8 @@ def _next_lead_id() -> str:
     global _lead_counter
     _lead_counter += 1
     date_str = datetime.now(timezone.utc).strftime("%Y%m%d")
-    return f"lead-{date_str}-{_lead_counter:03d}"
+    industry_tag = get_active_profile().get("name_en", "unknown")
+    return f"lead-{industry_tag}-{date_str}-{_lead_counter:03d}"
 
 
 # ------------------------------------------------------------------
@@ -146,7 +151,7 @@ class IntentAnalyzer:
             for idx, s in enumerate(signals)
         ]
 
-        user_prompt = _USER_PROMPT_TEMPLATE.format(
+        user_prompt = _get_user_prompt(
             count=len(signals),
             signals_json=json.dumps(signals_payload, ensure_ascii=False, indent=2),
         )
@@ -176,7 +181,7 @@ class IntentAnalyzer:
         response = await self._client.chat.completions.create(
             model=model,
             messages=[
-                {"role": "system", "content": _SYSTEM_PROMPT},
+                {"role": "system", "content": _get_system_prompt()},
                 {"role": "user", "content": user_prompt},
             ],
             temperature=0.2,

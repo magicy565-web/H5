@@ -13,17 +13,27 @@ import feedparser
 import httpx
 
 from .base import BaseCollector, RawSignal
-from monitor.config import SOURCES, REQUEST_DELAY_SECONDS
+from monitor.config import REQUEST_DELAY_SECONDS
 
 logger = logging.getLogger(__name__)
 
-# Patterns that suggest injection-molding purchase intent
-_KEYWORDS_RE = re.compile(
-    r"injection\s*mol[du]ing|plastic\s*machine|moul?ding\s*machine"
-    r"|injection\s*press|clamping\s*force|toggle\s*clamp"
-    r"|preform\s*machine|PET\s*machine|plastic\s*inject",
-    re.IGNORECASE,
-)
+
+def _get_keywords_re():
+    """Build a regex dynamically from active industry keywords."""
+    from monitor.config import KEYWORDS_DIRECT
+    # Extract key phrases for matching
+    terms = set()
+    for kw in KEYWORDS_DIRECT:
+        cleaned = kw.strip('"').lower()
+        # Take multi-word phrases
+        words = cleaned.split()
+        if len(words) >= 2:
+            terms.add(r"\s+".join(re.escape(w) for w in words[:3]))
+        elif len(words) == 1 and len(words[0]) > 4:
+            terms.add(re.escape(words[0]))
+    if not terms:
+        terms = {"injection.mol[du]ing"}
+    return re.compile("|".join(terms), re.IGNORECASE)
 
 
 class RSSCollector(BaseCollector):
@@ -36,6 +46,7 @@ class RSSCollector(BaseCollector):
     # ------------------------------------------------------------------
 
     async def collect(self) -> list[RawSignal]:
+        from monitor.config import SOURCES
         cfg: dict[str, Any] = SOURCES.get("rss", {})
         if not cfg.get("enabled", False):
             logger.info("RSS collector is disabled – skipping.")
@@ -88,7 +99,7 @@ class RSSCollector(BaseCollector):
             link: str = entry.get("link", "")
             searchable = f"{title} {summary}"
 
-            if not _KEYWORDS_RE.search(searchable):
+            if not _get_keywords_re().search(searchable):
                 continue
 
             published = self._parse_date(entry)

@@ -12,27 +12,26 @@ from typing import Any
 import httpx
 
 from .base import BaseCollector, RawSignal
-from monitor.config import SOURCES, REQUEST_DELAY_SECONDS
+from monitor.config import REQUEST_DELAY_SECONDS
 
 logger = logging.getLogger(__name__)
 
-# Lowercased fragments that suggest purchase / sourcing intent.
-_INTENT_KEYWORDS: list[str] = [
-    "injection molding",
-    "injection moulding",
-    "moulding machine",
-    "molding machine",
-    "plastic machine",
-    "buy injection",
-    "purchase injection",
-    "looking for injection",
-    "need injection",
-    "used injection",
-    "second hand injection",
-    "pet preform machine",
-    "plastic injection",
-    "injection equipment",
-]
+
+def _get_intent_keywords() -> list[str]:
+    """Build intent keyword list dynamically from active industry config."""
+    from monitor.config import KEYWORDS_DIRECT, KEYWORDS_INDIRECT
+    # Extract core terms from the configured keywords
+    terms = set()
+    for kw in KEYWORDS_DIRECT + KEYWORDS_INDIRECT:
+        # Clean quotes and country names
+        cleaned = kw.strip('"').lower()
+        # Add as-is for matching
+        terms.add(cleaned)
+        # Also add individual significant words/phrases
+        for word in cleaned.split():
+            if len(word) > 4 and word not in ("from", "with", "that", "this", "looking"):
+                terms.add(word)
+    return list(terms) if terms else ["injection molding"]
 
 _USER_AGENT = (
     "Mozilla/5.0 (compatible; IntentMonitorBot/1.0; "
@@ -43,7 +42,8 @@ _USER_AGENT = (
 def _matches_keywords(title: str, body: str) -> bool:
     """Return True if title or body contains any intent keyword."""
     combined = f"{title} {body}".lower()
-    return any(kw in combined for kw in _INTENT_KEYWORDS)
+    keywords = _get_intent_keywords()
+    return any(kw in combined for kw in keywords)
 
 
 def _post_to_signal(post: dict[str, Any], subreddit: str) -> RawSignal:
@@ -76,12 +76,10 @@ class RedditCollector(BaseCollector):
     name: str = "reddit"
 
     def __init__(self) -> None:
+        from monitor.config import SOURCES
         cfg = SOURCES.get("reddit", {})
         self.enabled: bool = cfg.get("enabled", False)
-        self.subreddits: list[str] = cfg.get(
-            "subreddits",
-            ["InjectionMolding", "manufacturing", "Machinists", "plastics"],
-        )
+        self.subreddits: list[str] = cfg.get("subreddits", [])
 
     async def collect(self) -> list[RawSignal]:
         if not self.enabled:

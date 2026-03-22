@@ -2,9 +2,17 @@
 Intent Monitor – main entry point.
 
 Orchestrates collection, deduplication, analysis, and reporting.
+
+Usage:
+    python3 -m monitor.intent_monitor --industry 注塑机
+    python3 -m monitor.intent_monitor --industry 家纺
+    python3 -m monitor.intent_monitor --industry 家具
+    python3 -m monitor.intent_monitor --industry all
+    python3 -m monitor.intent_monitor --list              # show available industries
 """
 from __future__ import annotations
 
+import argparse
 import asyncio
 import logging
 import sys
@@ -24,7 +32,11 @@ from monitor.collectors import (
     ApifyB2BCollector,
 )
 from monitor.collectors.base import RawSignal
-from monitor.config import SOURCES
+from monitor.config import (
+    load_industry,
+    get_active_industry,
+    list_industries,
+)
 from monitor.dedup import Deduplicator
 from monitor import storage
 
@@ -57,11 +69,18 @@ async def _run_collector(collector: Any) -> list[RawSignal]:
         return []
 
 
-async def run_monitor() -> None:
-    """Main monitoring pipeline: collect -> dedup -> analyse -> store."""
+async def run_monitor(industry: str) -> None:
+    """Main monitoring pipeline for a single industry."""
+    # Load industry profile (updates config module globals)
+    profile = load_industry(industry)
+
+    # Re-import SOURCES after load_industry updated it
+    from monitor.config import SOURCES
+
     start = datetime.now()
     logger.info("=" * 60)
-    logger.info("Intent Monitor run started at %s", start.strftime("%Y-%m-%d %H:%M:%S"))
+    logger.info("Intent Monitor [%s] started at %s",
+                industry, start.strftime("%Y-%m-%d %H:%M:%S"))
     logger.info("=" * 60)
 
     # ── 1. Initialize enabled collectors ──────────────────────────
@@ -102,16 +121,14 @@ async def run_monitor() -> None:
 
     if not new_signals:
         logger.info("No new signals found – nothing to analyse.")
-        _print_summary(start, source_counts, 0, 0, [])
+        _print_summary(industry, start, source_counts, 0, 0, [])
         return
 
     # ── 4. Analyse intent ─────────────────────────────────────────
     try:
         from monitor.analyzer import IntentAnalyzer
     except ImportError:
-        logger.error("monitor.analyzer module not found – skipping analysis. "
-                     "Raw signals will be stored as-is.")
-        # Store raw signals as basic dicts when analyzer is unavailable
+        logger.error("monitor.analyzer module not found – skipping analysis.")
         raw_dicts = [
             {
                 "contentHash": s.content_hash,
@@ -124,18 +141,19 @@ async def run_monitor() -> None:
                 "contactInfo": s.contact_info,
                 "collectedAt": s.collected_at or start.isoformat(),
                 "intentScore": 0,
+                "industry": industry,
             }
             for s in new_signals
         ]
         all_leads = storage.append_leads(raw_dicts)
         date_str = start.strftime("%Y%m%d")
-        storage.generate_excel(all_leads, date_str)
-        _print_summary(start, source_counts, len(new_signals), len(raw_dicts), raw_dicts)
+        storage.generate_excel(all_leads, date_str, industry)
+        _print_summary(industry, start, source_counts, len(new_signals), len(raw_dicts), raw_dicts)
         return
 
     analyzer = IntentAnalyzer()
     leads = await analyzer.analyze_all(new_signals)
-    qualified = [l for l in leads]  # analyzer should already filter by MIN_INTENT_SCORE
+    qualified = [l for l in leads]
     logger.info("Qualified leads from analysis: %d", len(qualified))
 
     # ── 5. Persist ────────────────────────────────────────────────
@@ -143,14 +161,27 @@ async def run_monitor() -> None:
 
     # ── 6. Excel report ───────────────────────────────────────────
     date_str = start.strftime("%Y%m%d")
-    filepath = storage.generate_excel(all_leads, date_str)
+    filepath = storage.generate_excel(all_leads, date_str, industry)
     logger.info("Report written to %s", filepath)
 
     # ── 7. Summary ────────────────────────────────────────────────
-    _print_summary(start, source_counts, len(new_signals), len(qualified), qualified)
+    _print_summary(industry, start, source_counts, len(new_signals), len(qualified), qualified)
+
+
+async def run_all_industries() -> None:
+    """Run monitor for all configured industries sequentially."""
+    industries = list_industries()
+    logger.info("Running monitor for %d industries: %s", len(industries), ", ".join(industries))
+    for industry in industries:
+        try:
+            await run_monitor(industry)
+        except Exception:
+            logger.exception("Failed to run monitor for industry: %s", industry)
+        logger.info("")
 
 
 def _print_summary(
+    industry: str,
     start: datetime,
     source_counts: dict[str, int],
     new_count: int,
@@ -164,7 +195,7 @@ def _print_summary(
     lines = [
         "",
         "=" * 60,
-        f"  Intent Monitor Summary  ({start.strftime('%Y-%m-%d %H:%M')})",
+        f"  Intent Monitor Summary [{industry}]  ({start.strftime('%Y-%m-%d %H:%M')})",
         "=" * 60,
         "",
         "Sources:",
@@ -177,7 +208,6 @@ def _print_summary(
     lines.append(f"Qualified leads:           {qualified_count}")
     lines.append("")
 
-    # Top leads preview
     if leads:
         lines.append("Top leads:")
         preview_items = leads[:5] if isinstance(leads, list) else []
@@ -203,9 +233,30 @@ def _print_summary(
     logger.info(summary)
 
 
-if __name__ == "__main__":
+def main():
+    parser = argparse.ArgumentParser(description="Intent Monitor — multi-industry purchase signal scanner")
+    parser.add_argument("--industry", "-i", type=str, default="注塑机",
+                        help="Industry to monitor (e.g. 注塑机, 家纺, 家具, all)")
+    parser.add_argument("--list", "-l", action="store_true",
+                        help="List all available industries and exit")
+    args = parser.parse_args()
+
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(message)s",
     )
-    asyncio.run(run_monitor())
+
+    if args.list:
+        print("Available industries:")
+        for name in list_industries():
+            print(f"  - {name}")
+        return
+
+    if args.industry == "all":
+        asyncio.run(run_all_industries())
+    else:
+        asyncio.run(run_monitor(args.industry))
+
+
+if __name__ == "__main__":
+    main()

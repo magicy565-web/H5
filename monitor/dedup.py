@@ -6,7 +6,6 @@ import logging
 from pathlib import Path
 
 from monitor.collectors.base import RawSignal
-from monitor.config import LEADS_FILE
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +23,7 @@ class Deduplicator:
 
     def _load_existing(self) -> None:
         """Load content_hash values from the persistent leads file."""
+        from monitor.config import LEADS_FILE
         if not LEADS_FILE.exists():
             logger.debug("Leads file not found at %s – starting fresh.", LEADS_FILE)
             return

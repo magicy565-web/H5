@@ -12,7 +12,7 @@ from typing import Any, TYPE_CHECKING
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 
-from monitor.config import DB_DIR, LEADS_FILE, OUTPUT_DIR
+from monitor.config import DB_DIR, OUTPUT_DIR
 
 if TYPE_CHECKING:
     pass  # future: from monitor.analyzer import Lead
@@ -26,17 +26,23 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # ── JSON helpers ──────────────────────────────────────────────────────
 
+def _get_leads_file():
+    """Get the current LEADS_FILE (may change per industry)."""
+    from monitor.config import LEADS_FILE
+    return LEADS_FILE
+
+
 def load_leads() -> list[dict]:
-    """Load existing leads from *leads.json*.  Return [] if the file is
-    missing or corrupt."""
-    if not LEADS_FILE.exists():
-        logger.debug("Leads file %s does not exist yet.", LEADS_FILE)
+    """Load existing leads from the active industry's leads file."""
+    leads_file = _get_leads_file()
+    if not leads_file.exists():
+        logger.debug("Leads file %s does not exist yet.", leads_file)
         return []
     try:
-        data = json.loads(LEADS_FILE.read_text(encoding="utf-8"))
+        data = json.loads(leads_file.read_text(encoding="utf-8"))
         if isinstance(data, list):
             return data
-        logger.warning("leads.json root is not a list – returning empty.")
+        logger.warning("leads file root is not a list – returning empty.")
         return []
     except (json.JSONDecodeError, OSError) as exc:
         logger.warning("Failed to read leads file: %s", exc)
@@ -44,12 +50,13 @@ def load_leads() -> list[dict]:
 
 
 def save_leads(leads: list[dict]) -> None:
-    """Write *leads* list to *leads.json* with human-readable formatting."""
-    LEADS_FILE.write_text(
+    """Write *leads* list to the active industry's leads file."""
+    leads_file = _get_leads_file()
+    leads_file.write_text(
         json.dumps(leads, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
-    logger.info("Saved %d leads to %s.", len(leads), LEADS_FILE)
+    logger.info("Saved %d leads to %s.", len(leads), leads_file)
 
 
 def _lead_to_dict(lead: Any) -> dict:
@@ -136,10 +143,10 @@ _HEADER_FILL = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="
 _HEADER_ALIGN = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
 
-def generate_excel(leads: list[dict], date_str: str) -> Path:
+def generate_excel(leads: list[dict], date_str: str, industry: str = "") -> Path:
     """Generate an Excel report and return the output file path.
 
-    The report is saved to ``OUTPUT_DIR/采购意向日报_{date_str}.xlsx``.
+    The report is saved to ``OUTPUT_DIR/采购意向日报_{industry}_{date_str}.xlsx``.
     """
     # Sort by intentScore descending (treat missing as 0)
     sorted_leads = sorted(
@@ -188,7 +195,8 @@ def generate_excel(leads: list[dict], date_str: str) -> Path:
         ws.column_dimensions[col_letter].width = min(max_len + 4, 60)
 
     # ── Save ──────────────────────────────────────────────────────
-    filename = f"采购意向日报_{date_str}.xlsx"
+    tag = f"_{industry}" if industry else ""
+    filename = f"采购意向日报{tag}_{date_str}.xlsx"
     filepath = OUTPUT_DIR / filename
     wb.save(str(filepath))
     logger.info("Excel report saved to %s (%d rows).", filepath, len(sorted_leads))

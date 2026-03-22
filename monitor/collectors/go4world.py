@@ -10,21 +10,27 @@ from typing import Optional
 import httpx
 
 from .base import BaseCollector, RawSignal
-from monitor.config import SOURCES, REQUEST_DELAY_SECONDS
+from monitor.config import REQUEST_DELAY_SECONDS
 
 logger = logging.getLogger(__name__)
 
-_SEARCH_TERMS = [
-    "injection-molding-machine",
-    "injection-moulding-machine",
-    "plastic-injection-machine",
-    "pet-preform-machine",
-]
+
+def _get_search_terms() -> list[str]:
+    """Build go4world search terms from active industry keywords."""
+    from monitor.config import KEYWORDS_DIRECT
+    terms = set()
+    for kw in KEYWORDS_DIRECT[:6]:
+        # Convert keyword to URL slug: "buy bedding sets wholesale" -> "bedding-sets"
+        words = kw.lower().replace('"', '').split()
+        # Filter out common verbs/prepositions
+        skip = {"buy", "from", "china", "import", "wholesale", "supplier",
+                "needed", "wanted", "looking", "for", "bulk", "purchase", "求购", "采购"}
+        meaningful = [w for w in words if w not in skip and len(w) > 2]
+        if meaningful:
+            terms.add("-".join(meaningful[:3]))
+    return list(terms) if terms else ["injection-molding-machine"]
 
 _BASE_URL = "https://www.go4worldbusiness.com/buy-leads/{term}.html"
-
-_CFG = SOURCES.get("go4worldbusiness", {})
-_MAX_PAGES: int = _CFG.get("max_pages", 3)
 
 # Precompiled patterns for lightweight HTML parsing.
 _RE_LEAD_BLOCK = re.compile(
@@ -62,10 +68,14 @@ class Go4WorldBusinessCollector(BaseCollector):
     name: str = "go4worldbusiness"
 
     async def collect(self) -> list[RawSignal]:
-        if not _CFG.get("enabled", False):
+        from monitor.config import SOURCES
+        cfg = SOURCES.get("go4worldbusiness", {})
+        if not cfg.get("enabled", False):
             logger.info("go4worldbusiness collector is disabled, skipping")
             return []
 
+        max_pages = cfg.get("max_pages", 3)
+        search_terms = _get_search_terms()
         signals: list[RawSignal] = []
         async with httpx.AsyncClient(
             timeout=20.0,
@@ -80,10 +90,10 @@ class Go4WorldBusinessCollector(BaseCollector):
                 "Accept-Language": "en-US,en;q=0.9",
             },
         ) as client:
-            for term in _SEARCH_TERMS:
+            for term in search_terms:
                 url = _BASE_URL.format(term=term)
                 try:
-                    new = await self._scrape_term(client, url, term)
+                    new = await self._scrape_term(client, url, term, max_pages)
                     signals.extend(new)
                 except Exception:
                     logger.exception("Failed to scrape term %s", term)
@@ -98,11 +108,12 @@ class Go4WorldBusinessCollector(BaseCollector):
         client: httpx.AsyncClient,
         start_url: str,
         term: str,
+        max_pages: int = 3,
     ) -> list[RawSignal]:
         signals: list[RawSignal] = []
         url: Optional[str] = start_url
 
-        for page in range(1, _MAX_PAGES + 1):
+        for page in range(1, max_pages + 1):
             if url is None:
                 break
 

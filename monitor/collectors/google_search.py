@@ -16,12 +16,7 @@ from urllib.parse import quote_plus, urlencode
 import httpx
 
 from .base import BaseCollector, RawSignal
-from monitor.config import (
-    KEYWORDS_DIRECT,
-    KEYWORDS_INDIRECT,
-    REQUEST_DELAY_SECONDS,
-    SOURCES,
-)
+from monitor.config import REQUEST_DELAY_SECONDS
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +42,7 @@ class GoogleSearchCollector(BaseCollector):
     name: str = "google_search"
 
     def __init__(self) -> None:
+        from monitor.config import SOURCES
         cfg = SOURCES.get("google_search", {})
         self._max_results: int = cfg.get("max_results_per_keyword", 5)
         self._use_api: bool = bool(GOOGLE_API_KEY and GOOGLE_CSE_ID)
@@ -60,6 +56,7 @@ class GoogleSearchCollector(BaseCollector):
     # ------------------------------------------------------------------
 
     async def collect(self) -> list[RawSignal]:
+        from monitor.config import SOURCES, KEYWORDS_DIRECT, KEYWORDS_INDIRECT
         cfg = SOURCES.get("google_search", {})
         if not cfg.get("enabled", False):
             logger.info("Google search source is disabled, skipping.")
