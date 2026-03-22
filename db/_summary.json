@@ -1,0 +1,33 @@
+{
+  "totalBuyers": 50492,
+  "industries": {
+    "精密加工": 5548,
+    "注塑模具": 5508,
+    "电子组装": 5651,
+    "五金工具": 5652,
+    "家居用品": 5686,
+    "纺织服装": 5638,
+    "包装印刷": 5692,
+    "汽车配件": 5573,
+    "医疗器械": 5544
+  },
+  "generatedAt": "2026-03-22",
+  "schema": {
+    "id": "string - unique buyer ID",
+    "name": "string - company name",
+    "country": "string - country name in Chinese",
+    "flag": "string - country flag emoji",
+    "city": "string - city name",
+    "scale": "string - 小型/中型/中大型/大型/超大型",
+    "annualProcurement": "string - annual procurement range",
+    "products": "string[] - interested product categories",
+    "certsRequired": "string[] - required certifications",
+    "moq": "number - minimum order quantity",
+    "verified": "boolean - platform verified",
+    "activityScore": "number 0-100 - recent activity score",
+    "contactCount": "number - contacts on file",
+    "lastActiveDaysAgo": "number - days since last activity",
+    "procurementFreq": "string - procurement frequency",
+    "paymentTerms": "string - preferred payment terms"
+  }
+}

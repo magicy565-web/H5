@@ -1,0 +1,1408 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>工厂入驻 — CNSubscribe</title>
+<style>
+:root {
+  --orange: #ff6b35;
+  --orange-light: #ff8a5c;
+  --orange-dark: #e85a28;
+  --green: #00b578;
+  --blue: #3b82f6;
+  --purple: #8b5cf6;
+  --text-primary: #1a1a2e;
+  --text-secondary: #555;
+  --text-muted: #999;
+  --bg: #f7f8fa;
+  --bg-white: #ffffff;
+  --border: #eee;
+  --shadow-sm: 0 2px 8px rgba(0,0,0,.06);
+  --font: -apple-system,"PingFang SC","Microsoft YaHei","Hiragino Sans GB",sans-serif;
+  --radius: 12px;
+  --radius-sm: 8px;
+}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent}
+body{font-family:var(--font);background:var(--bg);color:var(--text-primary);line-height:1.6;overflow-x:hidden;-webkit-font-smoothing:antialiased}
+.wrap{max-width:480px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column}
+
+/* TOPBAR */
+.topbar{background:var(--bg-white);padding:14px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100}
+.topbar-avatar{width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,var(--orange),var(--orange-dark));display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;font-weight:700;flex-shrink:0}
+.topbar-name{font-size:14px;font-weight:700}
+.topbar-status{font-size:11px;color:var(--green);display:flex;align-items:center;gap:4px}
+.topbar-dot{width:6px;height:6px;background:var(--green);border-radius:50%;animation:pulse 2s infinite}
+
+/* CHAT */
+.chat{flex:1;padding:16px;display:flex;flex-direction:column;gap:16px}
+.msg{animation:slideUp .3s ease}
+.msg-ai{display:flex;gap:10px;align-items:flex-start}
+.msg-avatar{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--orange),var(--orange-dark));display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:700;flex-shrink:0;margin-top:2px}
+.msg-bubble{background:var(--bg-white);border-radius:2px 16px 16px 16px;padding:14px 16px;max-width:calc(100% - 48px);box-shadow:var(--shadow-sm);font-size:14px;line-height:1.7}
+.msg-user{display:flex;justify-content:flex-end}
+.msg-user .msg-bubble{background:var(--orange);color:#fff;border-radius:16px 2px 16px 16px;box-shadow:0 4px 16px rgba(255,107,53,.25)}
+
+/* Thinking dots */
+.think-dots{display:flex;gap:4px;padding:2px 0}
+.think-dot{width:7px;height:7px;background:var(--text-muted);border-radius:50%;animation:dotBounce 1.4s ease infinite}
+.think-dot:nth-child(2){animation-delay:.2s}
+.think-dot:nth-child(3){animation-delay:.4s}
+
+/* Think block (ChatGPT-style collapsible reasoning) */
+.think-block{margin:10px 0;border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden}
+.think-toggle{display:flex;align-items:center;gap:6px;padding:8px 12px;background:var(--bg);font-size:11px;color:var(--text-muted);cursor:pointer;user-select:none;transition:background .2s}
+.think-toggle:hover{background:#eef0f2}
+.think-toggle-icon{transition:transform .3s;font-size:10px}
+.think-toggle.open .think-toggle-icon{transform:rotate(90deg)}
+.think-toggle .think-spinner{width:12px;height:12px;border:1.5px solid var(--border);border-top-color:var(--orange);border-radius:50%;animation:spin .8s linear infinite;flex-shrink:0}
+.think-toggle.done .think-spinner{display:none}
+.think-toggle.done::after{content:'';width:12px;height:12px;background:var(--green);border-radius:50%;flex-shrink:0}
+.think-body{max-height:0;overflow:hidden;transition:max-height .4s ease}
+.think-body.open{max-height:1200px}
+.think-inner{padding:10px 12px;font-size:11px;color:var(--text-secondary);line-height:1.8;border-top:1px solid var(--border)}
+.think-line{opacity:0;transition:opacity .4s;margin-bottom:5px}
+.think-line.show{opacity:1}
+.think-line .tl-text{display:inline}
+.think-line .tl-label{display:inline-block;font-size:9px;padding:1px 5px;border-radius:3px;margin-right:4px;font-weight:600}
+.think-line .tl-label.search{background:#eff6ff;color:var(--blue)}
+.think-line .tl-label.match{background:#fff8f5;color:var(--orange)}
+.think-line .tl-label.eval{background:#f5f0ff;color:var(--purple)}
+.think-line .tl-label.result{background:#f0faf5;color:var(--green)}
+.think-line .tl-highlight{color:var(--orange);font-weight:600}
+.think-line .tl-num{font-variant-numeric:tabular-nums;font-weight:700}
+.think-cursor{display:inline-block;width:2px;height:13px;background:var(--text-muted);vertical-align:middle;margin-left:1px;animation:blink .6s infinite}
+
+/* FORM */
+.form-card{background:var(--bg);border-radius:var(--radius);padding:16px;margin-top:8px}
+.form-field{margin-bottom:10px}
+.form-label{font-size:13px;font-weight:600;margin-bottom:4px;display:block;color:var(--text-secondary)}
+.form-select{width:100%;padding:11px 12px;font-size:14px;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-white);font-family:var(--font);outline:none;-webkit-appearance:none;transition:border-color .2s}
+.form-select:focus{border-color:var(--orange)}
+.form-select.error{border-color:#ff4d4f}
+.btn-match{display:block;width:100%;padding:13px;margin-top:14px;font-size:15px;font-weight:700;border:none;border-radius:var(--radius-sm);background:linear-gradient(135deg,var(--orange),var(--orange-dark));color:#fff;cursor:pointer;box-shadow:0 4px 16px rgba(255,107,53,.3)}
+.btn-match:active{transform:scale(.98)}
+
+/* EXPOSURE CARD */
+.expo-card{background:linear-gradient(135deg,#1a1a2e,#2d2d52);border-radius:var(--radius);padding:20px;margin:8px 0;color:#fff}
+.expo-card-title{font-size:11px;opacity:.5;letter-spacing:1px;text-align:center;margin-bottom:12px}
+.expo-row{display:flex;justify-content:space-around}
+.expo-item{text-align:center}
+.expo-num{font-size:32px;font-weight:900;font-variant-numeric:tabular-nums;color:var(--orange)}
+.expo-unit{font-size:11px;opacity:.6;margin-top:2px}
+.expo-note{font-size:10px;opacity:.3;margin-top:12px;text-align:center}
+
+/* TIMELINE */
+.timeline{margin:4px 0;position:relative}
+.tl-phase{position:relative;padding:0 0 0 36px;opacity:0;transform:translateY(12px);transition:all .4s ease}
+.tl-phase.show{opacity:1;transform:translateY(0)}
+.tl-phase::before{content:'';position:absolute;left:13px;top:28px;bottom:0;width:2px;background:var(--border)}
+.tl-phase:last-child::before{display:none}
+.tl-dot{position:absolute;left:6px;top:4px;width:16px;height:16px;border-radius:50%;border:2px solid var(--border);background:var(--bg-white);transition:all .4s ease;z-index:1}
+.tl-phase.active .tl-dot{border-color:var(--orange);background:var(--orange);box-shadow:0 0 0 4px rgba(255,107,53,.15)}
+.tl-phase.done .tl-dot{border-color:var(--green);background:var(--green)}
+.tl-header{display:flex;align-items:baseline;gap:8px;margin-bottom:4px}
+.tl-week{font-size:12px;font-weight:700;color:var(--orange);white-space:nowrap}
+.tl-title{font-size:14px;font-weight:700}
+.tl-desc{font-size:12px;color:var(--text-secondary);line-height:1.5;margin-bottom:6px}
+.tl-body{padding-bottom:18px}
+
+/* === PHASE 1: Doc chaos === */
+.doc-pile{position:relative;height:100px;margin:8px 0;overflow:hidden}
+.doc-file{position:absolute;width:56px;border-radius:4px;box-shadow:0 1px 4px rgba(0,0,0,.12);opacity:0;transition:all .7s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;overflow:hidden}
+.doc-file.show{opacity:1}
+.doc-file.collapse{transform:translate(var(--tx),var(--ty)) scale(.2) rotate(0deg) !important;opacity:0}
+.doc-file-bar{height:10px;display:flex;align-items:center;padding:0 4px;gap:2px}
+.doc-file-bar span{width:3px;height:3px;border-radius:50%;background:rgba(255,255,255,.5)}
+.doc-file-body{flex:1;background:#fff;padding:3px 4px;display:flex;flex-direction:column;gap:2px}
+.doc-file-line{height:2px;border-radius:1px;background:#e8e8e8}
+.doc-file-name{font-size:6px;color:var(--text-muted);text-align:center;margin-top:2px;white-space:nowrap;overflow:hidden}
+.doc-file.pdf .doc-file-bar{background:#e74c3c}
+.doc-file.xls .doc-file-bar{background:#27ae60}
+.doc-file.ppt .doc-file-bar{background:#e67e22}
+.doc-file.doc .doc-file-bar{background:#3498db}
+.doc-file.img .doc-file-bar{background:#9b59b6}
+
+/* Merge animation */
+.merge-line{text-align:center;padding:6px 0;opacity:0;transition:opacity .4s}
+.merge-line.show{opacity:1}
+.merge-line-inner{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--text-muted)}
+.merge-spinner{width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--orange);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Built info card */
+.built-card{background:var(--bg-white);border:1.5px solid var(--border);border-radius:var(--radius);padding:12px;margin:8px 0;opacity:0;transform:translateY(10px) scale(.96);transition:all .5s cubic-bezier(.4,0,.2,1)}
+.built-card.show{opacity:1;transform:translateY(0) scale(1);border-color:var(--orange);box-shadow:0 2px 12px rgba(255,107,53,.1)}
+.bc-head{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.bc-logo{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,var(--orange),var(--orange-dark));display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:700}
+.bc-title{flex:1}
+.bc-name{font-size:13px;font-weight:700}
+.bc-loc{font-size:10px;color:var(--text-muted)}
+.bc-badge{font-size:9px;color:var(--green);background:#f0faf5;padding:2px 6px;border-radius:4px;font-weight:600}
+.bc-row{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px}
+.bc-tag{font-size:9px;padding:2px 6px;border-radius:4px;background:var(--bg);color:var(--text-secondary);opacity:0;transform:scale(.8);transition:all .3s ease}
+.bc-tag.show{opacity:1;transform:scale(1)}
+.bc-stats{display:flex;gap:12px;padding-top:6px;border-top:1px solid var(--border)}
+.bc-stat{text-align:center;flex:1}
+.bc-stat-num{font-size:14px;font-weight:800;color:var(--orange)}
+.bc-stat-label{font-size:8px;color:var(--text-muted)}
+
+/* Lead notification cards */
+.lead-feed{display:flex;flex-direction:column;gap:6px;margin:8px 0}
+.lead-notif{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg);border-radius:var(--radius-sm);border-left:3px solid transparent;opacity:0;transform:translateX(-12px);transition:all .4s ease}
+.lead-notif.show{opacity:1;transform:translateX(0)}
+.lead-notif.view{border-left-color:var(--blue)}
+.lead-notif.inquiry{border-left-color:var(--orange)}
+.lead-notif.fav{border-left-color:var(--purple)}
+.ln-icon{font-size:18px;flex-shrink:0}
+.ln-body{flex:1;min-width:0}
+.ln-text{font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ln-meta{font-size:9px;color:var(--text-muted)}
+.ln-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;animation:pulse 1.5s infinite}
+.ln-dot.blue{background:var(--blue)}
+.ln-dot.orange{background:var(--orange)}
+.ln-dot.purple{background:var(--purple)}
+
+/* === PHASE 2: Client cards === */
+.client-list{display:flex;flex-direction:column;gap:6px;margin:8px 0}
+.client-card{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg);border-radius:var(--radius-sm);opacity:0;transform:scale(.95);transition:all .4s ease}
+.client-card.show{opacity:1;transform:scale(1)}
+.client-card.dimmed{opacity:.3;transform:scale(.92)}
+.client-card.highlight{background:#fff8f5;border:1px solid var(--orange);box-shadow:0 1px 6px rgba(255,107,53,.1)}
+.cc-avatar{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.cc-info{flex:1;min-width:0}
+.cc-name{font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cc-detail{font-size:9px;color:var(--text-muted)}
+.cc-intent{font-size:9px;padding:2px 6px;border-radius:4px;font-weight:600;flex-shrink:0}
+.cc-intent.high{background:#fff8f5;color:var(--orange)}
+.cc-intent.mid{background:var(--bg);color:var(--text-muted)}
+.filter-label{font-size:10px;color:var(--text-muted);text-align:center;margin:4px 0;opacity:0;transition:opacity .3s}
+.filter-label.show{opacity:1}
+
+/* === PHASE 3: Order notifications === */
+.order-feed{display:flex;flex-direction:column;gap:6px;margin:8px 0}
+.order-notif{display:flex;align-items:flex-start;gap:8px;padding:10px;background:var(--bg-white);border:1px solid var(--border);border-radius:var(--radius-sm);opacity:0;transform:translateY(8px);transition:all .4s ease}
+.order-notif.show{opacity:1;transform:translateY(0)}
+.on-icon{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.on-icon.sample{background:#eff6ff;color:var(--blue)}
+.on-icon.trial{background:#fff8f5;color:var(--orange)}
+.on-icon.reorder{background:#f0faf5;color:var(--green)}
+.on-body{flex:1}
+.on-title{font-size:12px;font-weight:700}
+.on-detail{font-size:10px;color:var(--text-secondary);margin-top:1px}
+.on-amount{font-size:13px;font-weight:800;flex-shrink:0}
+.on-amount.blue{color:var(--blue)}
+.on-amount.orange{color:var(--orange)}
+.on-amount.green{color:var(--green)}
+.on-time{font-size:8px;color:var(--text-muted);margin-top:2px}
+
+/* === PHASE 4: Revenue growth === */
+.rev-chart{display:flex;align-items:flex-end;gap:4px;height:64px;margin:8px 0;padding:0 4px}
+.rev-bar{flex:1;border-radius:3px 3px 0 0;transition:height .6s cubic-bezier(.4,0,.2,1);position:relative}
+.rev-bar-label{position:absolute;top:-14px;left:50%;transform:translateX(-50%);font-size:7px;color:var(--text-muted);white-space:nowrap}
+.rev-bar-val{position:absolute;top:-14px;left:50%;transform:translateX(-50%);font-size:8px;font-weight:700;white-space:nowrap;opacity:0;transition:opacity .3s}
+.rev-bar-val.show{opacity:1}
+.partnership-card{display:flex;align-items:center;gap:8px;padding:10px;background:linear-gradient(135deg,#fff8f5,#fff);border:1.5px solid var(--orange);border-radius:var(--radius-sm);margin:8px 0;opacity:0;transform:scale(.95);transition:all .5s ease}
+.partnership-card.show{opacity:1;transform:scale(1)}
+.pc-icon{font-size:22px}
+.pc-body{flex:1}
+.pc-title{font-size:12px;font-weight:700;color:var(--orange)}
+.pc-detail{font-size:10px;color:var(--text-secondary)}
+
+/* CTA */
+.cta-card{background:var(--bg-white);border:1.5px solid var(--orange);border-radius:var(--radius);padding:16px;margin:8px 0}
+.cta-title{font-size:14px;font-weight:700;margin-bottom:2px}
+.cta-sub{font-size:12px;color:var(--text-muted);margin-bottom:12px}
+.cta-field{margin-bottom:8px}
+.cta-label{font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:3px}
+.cta-label .req{color:#ff4d4f}
+.cta-input{width:100%;padding:10px 12px;font-size:14px;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);font-family:var(--font);outline:none;transition:border-color .2s}
+.cta-input:focus{border-color:var(--orange);background:#fff}
+.cta-input.error{border-color:#ff4d4f}
+.btn-submit{display:block;width:100%;padding:13px;margin-top:12px;font-size:15px;font-weight:700;border:none;border-radius:var(--radius-sm);background:linear-gradient(135deg,var(--orange),var(--orange-dark));color:#fff;cursor:pointer;box-shadow:0 4px 16px rgba(255,107,53,.3)}
+.btn-submit:active{transform:scale(.98)}
+.cta-promise{font-size:11px;color:var(--text-muted);margin-top:8px;text-align:center}
+
+/* Toast */
+.toast{position:fixed;top:20px;left:50%;transform:translateX(-50%) translateY(-80px);padding:10px 24px;border-radius:8px;font-size:14px;z-index:9999;transition:transform .3s;pointer-events:none}
+.toast.show{transform:translateX(-50%) translateY(0)}
+.toast.success{background:var(--green);color:#fff}
+.toast.error{background:#ff4d4f;color:#fff}
+
+@keyframes slideUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes dotBounce{0%,80%,100%{transform:translateY(0)}40%{transform:translateY(-5px)}}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+@keyframes breathe{0%,100%{opacity:.85;transform:scale(1)}50%{opacity:1;transform:scale(1.01)}}
+@keyframes numJump{0%{transform:scale(1)}30%{transform:scale(1.15)}60%{transform:scale(.97)}100%{transform:scale(1)}}
+@keyframes shake{0%,100%{transform:rotate(0) translate(0)}25%{transform:rotate(-5deg) translate(-2px,1px)}50%{transform:rotate(3deg) translate(1px,-1px)}75%{transform:rotate(-2deg) translate(-1px,2px)}}
+@keyframes breathePulse{0%,100%{box-shadow:0 0 0 0 rgba(255,107,53,.15)}50%{box-shadow:0 0 12px 4px rgba(255,107,53,.1)}}
+.think-block{animation:breathePulse 3s ease infinite}
+.think-block.done-anim{animation:none}
+
+/* Multi-skill think sections */
+.think-skill{margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(0,0,0,.04)}
+.think-skill:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0}
+.think-skill-header{display:flex;align-items:center;gap:6px;margin-bottom:4px;font-size:11px;font-weight:700;color:var(--text-secondary)}
+.think-skill-icon{font-size:12px}
+.think-skill-status{margin-left:auto;display:flex;align-items:center;gap:4px}
+.think-skill-status .sk-spinner{width:10px;height:10px;border:1.5px solid var(--border);border-top-color:var(--orange);border-radius:50%;animation:spin .8s linear infinite}
+.think-skill-status.done .sk-spinner{display:none}
+.think-skill-status.done::after{content:'\2713';color:var(--green);font-size:10px;font-weight:700}
+.think-skill-lines{padding-left:18px}
+
+/* Competition insight card */
+.competition-insight{background:var(--bg);border-radius:var(--radius-sm);padding:10px 12px;margin:8px 0;font-size:11px;color:var(--text-secondary);line-height:1.8;border-left:3px solid var(--purple);opacity:0;transform:translateY(8px);transition:all .4s ease}
+.competition-insight.show{opacity:1;transform:translateY(0)}
+.competition-insight .ci-title{font-size:12px;font-weight:700;color:var(--text-primary);margin-bottom:4px}
+.competition-insight .ci-row{display:flex;align-items:center;gap:4px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="topbar">
+  <div class="topbar-avatar">CN</div>
+  <div>
+    <div class="topbar-name">CNSubscribe</div>
+    <div class="topbar-status"><span class="topbar-dot"></span>在线</div>
+  </div>
+</div>
+
+<div class="chat" id="chat">
+  <div class="msg msg-ai">
+    <div class="msg-avatar">CN</div>
+    <div class="msg-bubble">
+      告诉我你的行业，我帮你算一下每月能带来多少采购商曝光和询盘。
+      <div class="form-card" id="formCard">
+        <div class="form-field">
+          <label class="form-label">产品类目</label>
+          <select class="form-select" id="inCat"><option value="">选择类目...</option><option>精密加工</option><option>注塑模具</option><option>电子组装</option><option>五金工具</option><option>家居用品</option><option>纺织服装</option><option>包装印刷</option><option>汽车配件</option><option>医疗器械</option><option value="other">其他</option></select>
+        </div>
+        <div class="form-field">
+          <label class="form-label">月产能</label>
+          <select class="form-select" id="inCap"><option value="">选择规模...</option><option>10万以下/月</option><option>10-50万/月</option><option>50-100万/月</option><option>100-500万/月</option><option>500万以上/月</option></select>
+        </div>
+        <div class="form-field">
+          <label class="form-label">城市</label>
+          <select class="form-select" id="inCity"><option value="">选择城市...</option><option>深圳</option><option>东莞</option><option>广州</option><option>佛山</option><option>杭州</option><option>宁波</option><option>温州</option><option>苏州</option><option>无锡</option><option>上海</option><option>青岛</option><option>厦门</option><option>泉州</option><option>重庆</option><option>成都</option><option value="other">其他</option></select>
+        </div>
+        <button class="btn-match" id="matchBtn">开始计算</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+var API_BASE=(function(){var p=location.pathname;return p.startsWith('/factory')?location.origin+'/factory':location.origin})();
+var chat=document.getElementById('chat');
+var savedCat='',savedCap='',savedCity='';
+
+/* --- MOCK INDUSTRY DATABASE --- */
+var MOCK_DB={
+  '精密加工':{exposure:320,inquiries:18,cycle:'14天',topBuyers:['美国','德国','日本'],avgOrder:'$12K-45K'},
+  '注塑模具':{exposure:280,inquiries:15,cycle:'11天',topBuyers:['德国','英国','韩国'],avgOrder:'$8K-35K'},
+  '电子组装':{exposure:410,inquiries:24,cycle:'9天',topBuyers:['美国','日本','荷兰'],avgOrder:'$15K-60K'},
+  '五金工具':{exposure:260,inquiries:14,cycle:'16天',topBuyers:['美国','澳洲','加拿大'],avgOrder:'$5K-25K'},
+  '家居用品':{exposure:350,inquiries:20,cycle:'12天',topBuyers:['英国','美国','瑞典'],avgOrder:'$8K-30K'},
+  '纺织服装':{exposure:300,inquiries:17,cycle:'13天',topBuyers:['美国','日本','法国'],avgOrder:'$10K-40K'},
+  '包装印刷':{exposure:220,inquiries:12,cycle:'18天',topBuyers:['美国','德国','澳洲'],avgOrder:'$6K-20K'},
+  '汽车配件':{exposure:290,inquiries:16,cycle:'15天',topBuyers:['德国','日本','美国'],avgOrder:'$20K-80K'},
+  '医疗器械':{exposure:180,inquiries:10,cycle:'21天',topBuyers:['美国','德国','英国'],avgOrder:'$25K-100K'}
+};
+var DEFAULT_DATA={exposure:250,inquiries:13,cycle:'15天',topBuyers:['美国','德国','英国'],avgOrder:'$8K-30K'};
+
+/* Capacity multiplier */
+function capMultiplier(cap){
+  if(cap.indexOf('500')>=0) return 1.6;
+  if(cap.indexOf('100')>=0) return 1.3;
+  if(cap.indexOf('50')>=0) return 1.1;
+  if(cap.indexOf('10-')>=0) return 0.9;
+  return 0.7;
+}
+
+/* --- HELPERS --- */
+function showToast(m,t){var e=document.getElementById('toast');e.textContent=m;e.className='toast '+t+' show';setTimeout(function(){e.classList.remove('show')},3500)}
+function delay(ms){return new Promise(function(r){setTimeout(r,ms)})}
+function scrollBottom(){window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'})}
+
+function animateNum(el,from,to,dur){
+  var start=null;
+  function step(ts){if(!start)start=ts;var p=Math.min((ts-start)/dur,1);var ease=1-Math.pow(1-p,3);el.textContent=Math.round(from+(to-from)*ease);if(p<1)requestAnimationFrame(step)}
+  requestAnimationFrame(step);
+}
+
+/* Typewriter: streams text char-by-char into el, supports HTML spans */
+function typewriter(el,html,speed){
+  return new Promise(function(resolve){
+    var temp=document.createElement('div');
+    temp.innerHTML=html;
+    var nodes=[];
+    function walk(parent){
+      for(var i=0;i<parent.childNodes.length;i++){
+        var n=parent.childNodes[i];
+        if(n.nodeType===3){
+          for(var c=0;c<n.textContent.length;c++) nodes.push({type:'char',ch:n.textContent[c]});
+        }else if(n.nodeType===1){
+          nodes.push({type:'open',tag:n.tagName.toLowerCase(),cls:n.className,style:n.getAttribute('style')||''});
+          walk(n);
+          nodes.push({type:'close'});
+        }
+      }
+    }
+    walk(temp);
+    var idx=0;
+    var stack=[];
+    function tick(){
+      if(idx>=nodes.length){resolve();return}
+      var node=nodes[idx];
+      var target=stack.length>0?stack[stack.length-1]:el;
+      if(node.type==='char'){
+        target.insertAdjacentText('beforeend',node.ch);
+      }else if(node.type==='open'){
+        var span=document.createElement(node.tag);
+        if(node.cls) span.className=node.cls;
+        if(node.style) span.setAttribute('style',node.style);
+        target.appendChild(span);
+        stack.push(span);
+      }else if(node.type==='close'){
+        stack.pop();
+      }
+      idx++;
+      var d=speed;
+      if(node.type==='char'){
+        if('\uFF0C\u3002\u3001\uFF1A\uFF1B\u2026\uFF01\uFF1F'.indexOf(node.ch)>=0) d=speed*3;
+        else if('\u00B7\u2192\u2713'.indexOf(node.ch)>=0) d=speed*2;
+        else if(node.ch===' ') d=speed*0.5;
+      }else{
+        d=0;
+      }
+      if(d>0) setTimeout(tick,d);
+      else tick();
+    }
+    tick();
+  });
+}
+
+function addMsg(type,html){
+  var div=document.createElement('div');
+  div.className='msg';
+  if(type==='user'){
+    div.classList.add('msg-user');
+    div.innerHTML='<div class="msg-bubble">'+html+'</div>';
+  }else if(type==='ai'){
+    div.classList.add('msg-ai');
+    div.innerHTML='<div class="msg-avatar">CN</div><div class="msg-bubble">'+html+'</div>';
+  }else if(type==='thinking'){
+    div.id='thinkMsg';
+    div.classList.add('msg-ai');
+    div.innerHTML='<div class="msg-avatar">CN</div><div class="msg-bubble"><div class="think-dots"><span class="think-dot"></span><span class="think-dot"></span><span class="think-dot"></span></div></div>';
+  }
+  chat.appendChild(div);
+  scrollBottom();
+  return div;
+}
+function removeThinking(){var el=document.getElementById('thinkMsg');if(el)el.remove()}
+
+/* --- LABEL MAP --- */
+var LABEL_MAP={search:'检索',match:'匹配',eval:'计算',result:'结论',predict:'预测',analyze:'分析'};
+
+/* --- SSE STREAM HANDLER --- */
+function createSSEParser(callbacks){
+  var buf='';
+  var currentEvent='';
+  var currentData='';
+
+  function processLine(line){
+    if(line===''){
+      if(currentData){
+        var parsed=null;
+        try{parsed=JSON.parse(currentData)}catch(e){parsed={text:currentData}}
+        if(callbacks[currentEvent]){
+          callbacks[currentEvent](parsed);
+        }
+      }
+      currentEvent='';
+      currentData='';
+      return;
+    }
+    if(line.indexOf('event:')=== 0){
+      currentEvent=line.substring(6).trim();
+    }else if(line.indexOf('data:')=== 0){
+      var d=line.substring(5);
+      if(d.charAt(0)===' ') d=d.substring(1);
+      currentData=currentData?currentData+'\n'+d:d;
+    }
+  }
+
+  return{
+    feed:function(chunk){
+      buf+=chunk;
+      var lines=buf.split('\n');
+      buf=lines.pop()||'';
+      for(var i=0;i<lines.length;i++){
+        processLine(lines[i]);
+      }
+    },
+    flush:function(){
+      if(buf) processLine(buf);
+      processLine('');
+      buf='';
+    }
+  };
+}
+
+/* --- SKILL DEFINITIONS --- */
+var SKILL_DEFS=[
+  {key:'buyer-match',  endpoint:'/api/skill/buyer-match',  icon:'\uD83D\uDD0D', name:'采购商匹配'},
+  {key:'market-estimate',endpoint:'/api/skill/market-estimate',icon:'\uD83D\uDCCA', name:'市场预估'},
+  {key:'order-forecast', endpoint:'/api/skill/order-forecast', icon:'\uD83D\uDCCB', name:'订单预测'},
+  {key:'competition',    endpoint:'/api/skill/competition',    icon:'\u2694\uFE0F',  name:'竞争分析'}
+];
+
+/* --- PER-SKILL SSE STREAM --- */
+function runSkillSSE(skillEndpoint,params,callbacks){
+  return new Promise(function(resolve,reject){
+    var collectedResult=null;
+
+    var parser=createSSEParser({
+      step:function(d){
+        if(callbacks.onStep) callbacks.onStep(d.label);
+      },
+      delta:function(d){
+        if(callbacks.onDelta) callbacks.onDelta(d.text);
+      },
+      result:function(d){
+        collectedResult=d;
+      },
+      done:function(){
+        if(callbacks.onDone) callbacks.onDone();
+        resolve(collectedResult);
+      },
+      error:function(d){
+        reject(new Error(d.message||'SSE error'));
+      }
+    });
+
+    fetch(API_BASE+skillEndpoint,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Accept':'text/event-stream'},
+      body:JSON.stringify(params)
+    }).then(function(res){
+      if(!res.ok) throw new Error('HTTP '+res.status);
+      var reader=res.body.getReader();
+      var decoder=new TextDecoder();
+
+      function pump(){
+        return reader.read().then(function(result){
+          if(result.done){
+            parser.flush();
+            return;
+          }
+          parser.feed(decoder.decode(result.value,{stream:true}));
+          return pump();
+        });
+      }
+      return pump();
+    }).then(function(){
+      resolve(collectedResult);
+    }).catch(function(err){
+      reject(err);
+    });
+  });
+}
+
+/* --- PER-SKILL MOCK GENERATORS --- */
+/* Shared country/buyer lookup tables */
+var COUNTRY_FLAGS={'美国':'\uD83C\uDDFA\uD83C\uDDF8','德国':'\uD83C\uDDE9\uD83C\uDDEA','日本':'\uD83C\uDDEF\uD83C\uDDF5','英国':'\uD83C\uDDEC\uD83C\uDDE7','韩国':'\uD83C\uDDF0\uD83C\uDDF7','荷兰':'\uD83C\uDDF3\uD83C\uDDF1','澳洲':'\uD83C\uDDE6\uD83C\uDDFA','加拿大':'\uD83C\uDDE8\uD83C\uDDE6','瑞典':'\uD83C\uDDF8\uD83C\uDDEA','法国':'\uD83C\uDDEB\uD83C\uDDF7'};
+var BUYER_NAMES={'美国':'GlobalTech Sourcing','德国':'M\u00FCller & Co. GmbH','日本':'Tanaka Trading Co.','英国':'Sterling Mfg Ltd','韩国':'KoreanTech Inc','荷兰':'Oranje Supply BV','澳洲':'Pacific Trade Group','加拿大':'Maple Industries','瑞典':'Nordic Components','法国':'Lumi\u00E8re SA'};
+var INDUSTRIES={'美国':'工业零部件','德国':'汽车配件','日本':'精密零件','英国':'消费电子','韩国':'电子元件','荷兰':'工业设备','澳洲':'矿业设备','加拿大':'机械部件','瑞典':'工业自动化','法国':'航空部件'};
+
+function mockStreamLines(lines,callbacks,targetTime){
+  return new Promise(async function(resolve){
+    var totalChars=0;
+    lines.forEach(function(l){totalChars+=l.text.length});
+    var breathTotal=targetTime*0.35;
+    var preLineTotal=targetTime*0.10;
+    var typeTotal=targetTime*0.55;
+    var baseCharDelay=Math.max(20,Math.min(70,typeTotal/totalChars));
+    var avgBreath=breathTotal/lines.length;
+    var avgPreLine=preLineTotal/lines.length;
+
+    for(var i=0;i<lines.length;i++){
+      callbacks.onStep(lines[i].label);
+      await delay(avgPreLine*(0.7+Math.random()*0.6));
+      var text=lines[i].text;
+      for(var c=0;c<text.length;c++){
+        callbacks.onDelta(text[c]);
+        var ch=text[c];
+        var d=baseCharDelay;
+        if('\uFF0C\u3002\u3001\uFF1A\uFF1B\u2026\uFF01\uFF1F'.indexOf(ch)>=0) d=baseCharDelay*3;
+        else if('\u00B7\u2192\u2713'.indexOf(ch)>=0) d=baseCharDelay*2;
+        else if(ch===' ') d=baseCharDelay*0.5;
+        await delay(d);
+      }
+      var bm=lines[i].label==='result'?1.5:(lines[i].label==='eval'?1.2:1.0);
+      await delay(avgBreath*bm*(0.7+Math.random()*0.6));
+    }
+    callbacks.onDone();
+    resolve();
+  });
+}
+
+function runMockBuyerMatch(cat,cap,city,callbacks){
+  var data=MOCK_DB[cat]||DEFAULT_DATA;
+  var mult=capMultiplier(cap);
+  var tb=data.topBuyers;
+
+  var lines=[
+    {label:'search',text:'连接采购商数据库...在库 527 个认证采购商'},
+    {label:'search',text:'加载行业索引：制造业 → '+cat+' → 子类目展开...'},
+    {label:'search',text:'筛选「'+cat+'」相关类目 → 命中 '+Math.round(120*mult)+' 个采购商'},
+    {label:'match',text:'交叉验证采购商资质：已认证 '+Math.round(105*mult)+' 个 · 活跃度≥80% '+Math.round(88*mult)+' 个'},
+    {label:'match',text:'按产能「'+cap+'」过滤 → '+Math.round(85*mult)+' 个符合产能要求'},
+    {label:'match',text:'分析地域匹配度：'+city+' → '+tb[0]+'航线覆盖 ✓'},
+    {label:'match',text:'分析地域匹配度：'+city+' → '+tb[1]+'航线覆盖 ✓  物流时效 12-18天'},
+    {label:'result',text:'匹配采购商主要来自：'+tb.join('、')}
+  ];
+
+  var mockResult={
+    leads:[
+      {icon:COUNTRY_FLAGS[tb[0]]||'\uD83C\uDFF3\uFE0F',name:BUYER_NAMES[tb[0]]||'Buyer A',action:'浏览了你的档案',country:tb[0],industry:INDUSTRIES[tb[0]]||cat,time:'刚刚',type:'view'},
+      {icon:COUNTRY_FLAGS[tb[1]]||'\uD83C\uDFF3\uFE0F',name:BUYER_NAMES[tb[1]]||'Buyer B',action:'发起询盘',country:tb[1],industry:INDUSTRIES[tb[1]]||cat,time:'2分钟前',type:'inquiry'},
+      {icon:COUNTRY_FLAGS[tb[2]]||'\uD83C\uDFF3\uFE0F',name:BUYER_NAMES[tb[2]]||'Buyer C',action:'收藏了你',country:tb[2],industry:INDUSTRIES[tb[2]]||cat,time:'5分钟前',type:'fav'},
+      {icon:COUNTRY_FLAGS[tb[0]]||'\uD83C\uDFF3\uFE0F',name:'SecondSource LLC',action:'浏览了你的档案',country:tb[0],industry:INDUSTRIES[tb[0]]||cat,time:'8分钟前',type:'view'}
+    ],
+    clients:[
+      {flag:COUNTRY_FLAGS[tb[0]]||'\uD83C\uDFF3\uFE0F',name:BUYER_NAMES[tb[0]]||'Buyer A',detail:'已询盘2次 · 月采购$15K-50K',intent:'high'},
+      {flag:COUNTRY_FLAGS[tb[1]]||'\uD83C\uDFF3\uFE0F',name:'Oranje Supply BV',detail:'浏览3次 · 未询盘',intent:'mid'},
+      {flag:COUNTRY_FLAGS[tb[1]]||'\uD83C\uDFF3\uFE0F',name:BUYER_NAMES[tb[1]]||'Buyer B',detail:'已询盘1次 · 月采购$20K-80K',intent:'high'},
+      {flag:COUNTRY_FLAGS[tb[2]]||'\uD83C\uDFF3\uFE0F',name:'Pacific Trade Group',detail:'浏览1次 · 未询盘',intent:'mid'},
+      {flag:COUNTRY_FLAGS[tb[2]]||'\uD83C\uDFF3\uFE0F',name:BUYER_NAMES[tb[2]]||'Buyer C',detail:'已询盘1次 · 索要报价单',intent:'high'},
+      {flag:COUNTRY_FLAGS[tb[0]]||'\uD83C\uDFF3\uFE0F',name:'SecondSource LLC',detail:'已询盘3次 · 要求样品',intent:'high'}
+    ]
+  };
+
+  var targetTime=25000+Math.random()*15000;
+  return mockStreamLines(lines,callbacks,targetTime).then(function(){return mockResult});
+}
+
+function runMockMarketEstimate(cat,cap,city,callbacks){
+  var data=MOCK_DB[cat]||DEFAULT_DATA;
+  var mult=capMultiplier(cap);
+  var exposure=Math.round(data.exposure*mult);
+  var inquiries=Math.round(data.inquiries*mult);
+  var tb=data.topBuyers;
+
+  var lines=[
+    {label:'eval',text:'计算基础曝光分析：'+data.exposure+' × '+mult.toFixed(1)},
+    {label:'eval',text:'行业基准对比：'+cat+' 平均曝光 '+data.exposure+'/月'},
+    {label:'eval',text:'产能加权：'+cap+' → 系数 '+mult.toFixed(1)+' = '+exposure+' 次/月'},
+    {label:'eval',text:'询盘转化模型：曝光 '+exposure+' × 转化率 '+(data.inquiries/data.exposure*100).toFixed(1)+'%'},
+    {label:'eval',text:'预估月询盘量：'+inquiries+' 条'},
+    {label:'eval',text:'首单周期估算：行业均值 '+data.cycle},
+    {label:'result',text:'核心采购地区：'+tb.join('、')+'，均单 '+data.avgOrder}
+  ];
+
+  var mockResult={
+    exposure:exposure,
+    inquiries:inquiries,
+    cycle:data.cycle,
+    topBuyers:tb,
+    avgOrder:data.avgOrder
+  };
+
+  var targetTime=25000+Math.random()*15000;
+  return mockStreamLines(lines,callbacks,targetTime).then(function(){return mockResult});
+}
+
+function runMockOrderForecast(cat,cap,city,callbacks){
+  var data=MOCK_DB[cat]||DEFAULT_DATA;
+  var mult=capMultiplier(cap);
+  var inquiries=Math.round(data.inquiries*mult);
+  var tb=data.topBuyers;
+  var b0=BUYER_NAMES[tb[0]]||'Buyer A';
+  var b1=BUYER_NAMES[tb[1]]||'Buyer B';
+
+  var lines=[
+    {label:'predict',text:'预测样品单周期：基于'+data.cycle+'转化模型'},
+    {label:'predict',text:'模拟订单漏斗：询盘 '+inquiries+' → 报价 '+Math.round(inquiries*0.7)+' → 样品 '+Math.round(inquiries*0.3)},
+    {label:'predict',text:'样品单转化 → $800 ('+b0+')'},
+    {label:'predict',text:'试单预估：'+b1+' · $5.2K · 第11周'},
+    {label:'predict',text:'返单概率分析：首单后30天返单率 68%'},
+    {label:'result',text:'8个月累计预估营收 $32K'}
+  ];
+
+  var mockResult={
+    orders:[
+      {icon:'\uD83D\uDCE6',buyer:b0,type:'样品单',detail:'CNC铝合金零件 \u00D7 50pcs',amount:'$800',week:'第9周'},
+      {icon:'\uD83D\uDCCB',buyer:b1,type:'试单',detail:'注塑外壳 \u00D7 2,000pcs',amount:'$5.2K',week:'第11周'},
+      {icon:'\uD83D\uDCE6',buyer:BUYER_NAMES[tb[2]]||'Buyer C',type:'小批量',detail:'PCB组装 \u00D7 500套',amount:'$3.8K',week:'第13周'},
+      {icon:'\uD83D\uDD04',buyer:b0,type:'返单',detail:'CNC铝合金零件 \u00D7 500pcs（加量）',amount:'$7.5K',week:'第16周'}
+    ],
+    revenue:[
+      {month:'M1',value:0},{month:'M2',value:0.8},{month:'M3',value:3.2},{month:'M4',value:5.8},
+      {month:'M5',value:12},{month:'M6',value:18},{month:'M7',value:25},{month:'M8',value:32}
+    ],
+    partnership:{buyer:b0.split(' ')[0],terms:'框架协议 $18K/月'}
+  };
+
+  var targetTime=25000+Math.random()*15000;
+  return mockStreamLines(lines,callbacks,targetTime).then(function(){return mockResult});
+}
+
+function runMockCompetition(cat,cap,city,callbacks){
+  var factoryCount=Math.round(35+Math.random()*25);
+  var priceL=Math.round(2+Math.random()*3)+'.'+Math.round(Math.random()*9);
+  var priceH=Math.round(8+Math.random()*4)+'.'+Math.round(Math.random()*9);
+  var data=MOCK_DB[cat]||DEFAULT_DATA;
+  var tb=data.topBuyers;
+
+  var lines=[
+    {label:'analyze',text:city+'同品类工厂数据采集...'},
+    {label:'analyze',text:'发现 '+factoryCount+' 家同品类工厂'},
+    {label:'analyze',text:'分析 FOB 均价区间：$'+priceL+'-$'+priceH+'/件'},
+    {label:'analyze',text:'产能规模对比：你的工厂排名前 '+Math.round(20+Math.random()*15)+'%'},
+    {label:'analyze',text:'检查贸易合规：'+tb[0]+'关税政策 ✓  '+tb[1]+'认证要求 ✓'},
+    {label:'result',text:'竞争度中等，建议优先对接'+tb[0]+'市场'}
+  ];
+
+  var mockResult={
+    factoryCount:factoryCount,
+    competitionLevel:'中等',
+    priceRange:'$'+priceL+'-$'+priceH+'/件',
+    advantage:'产能规模优势',
+    suggestion:'建议优先对接'+tb[0]+'市场'
+  };
+
+  var targetTime=25000+Math.random()*15000;
+  return mockStreamLines(lines,callbacks,targetTime).then(function(){return mockResult});
+}
+
+/* --- PARALLEL SKILL ORCHESTRATOR --- */
+function createSkillSection(skillDef){
+  var section=document.createElement('div');
+  section.className='think-skill';
+  section.id='skill-'+skillDef.key;
+
+  var header=document.createElement('div');
+  header.className='think-skill-header';
+  header.innerHTML='<span class="think-skill-icon">'+skillDef.icon+'</span><span>'+skillDef.name+'</span><div class="think-skill-status" id="skill-status-'+skillDef.key+'"><div class="sk-spinner"></div></div>';
+  section.appendChild(header);
+
+  var linesContainer=document.createElement('div');
+  linesContainer.className='think-skill-lines';
+  linesContainer.id='skill-lines-'+skillDef.key;
+  section.appendChild(linesContainer);
+
+  return section;
+}
+
+function makeSkillCallbacks(skillKey){
+  /*
+   * Unified event queue: all SSE events (step + delta) are queued
+   * and rendered sequentially with typewriter timing, regardless
+   * of how fast the server sends data.
+   */
+  var eventQ=[];       /* [{type:'step',label:''}, {type:'char',ch:''}, {type:'done'}] */
+  var processing=false;
+  var currentTextSpan=null;
+  var doneResolve=null;
+  var BASE_CHAR=25;    /* ms per character – realistic LLM typing speed */
+  var STEP_PAUSE=300;  /* ms pause when new step starts (breathing) */
+  var PUNCT_MULT=3;    /* multiplier for Chinese punctuation */
+  var SYMBOL_MULT=2.5;
+  var SPACE_MULT=0.3;
+
+  var _paused=false;
+
+  function enqueue(evt){ eventQ.push(evt); if(!processing) drainQueue(); }
+
+  function drainQueue(){
+    if(processing) return;
+    /* If paused, stop draining. Will be resumed by runAllSkills */
+    if(_paused){ return; }
+    if(eventQ.length===0){
+      /* If server already sent done but queue was still draining, now finish */
+      if(doneResolve){ doneResolve(); doneResolve=null; }
+      return;
+    }
+    processing=true;
+    var evt=eventQ.shift();
+
+    if(evt.type==='step'){
+      /* Create new think-line with breathing pause */
+      var container=document.getElementById('skill-lines-'+skillKey);
+      if(container){
+        var prevCursor=container.querySelector('.think-cursor');
+        if(prevCursor) prevCursor.remove();
+
+        var line=document.createElement('div');
+        line.className='think-line';
+        var labelSpan=document.createElement('span');
+        labelSpan.className='tl-label '+(evt.label||'search');
+        labelSpan.textContent=LABEL_MAP[evt.label]||evt.label||'检索';
+        line.appendChild(labelSpan);
+
+        var textSpan=document.createElement('span');
+        textSpan.className='tl-text';
+        line.appendChild(textSpan);
+
+        var cursor=document.createElement('span');
+        cursor.className='think-cursor';
+        line.appendChild(cursor);
+
+        container.appendChild(line);
+        requestAnimationFrame(function(){line.classList.add('show')});
+        scrollBottom();
+        currentTextSpan=textSpan;
+      }
+      /* Breathing pause before next event */
+      var pause=STEP_PAUSE*(0.7+Math.random()*0.6);
+      setTimeout(function(){processing=false;drainQueue()},pause);
+
+    }else if(evt.type==='char'){
+      if(currentTextSpan){
+        currentTextSpan.insertAdjacentText('beforeend',evt.ch);
+        scrollBottom();
+      }
+      var ch=evt.ch;
+      var d=BASE_CHAR;
+      if('\uFF0C\u3002\u3001\uFF1A\uFF1B\u2026\uFF01\uFF1F'.indexOf(ch)>=0) d=BASE_CHAR*PUNCT_MULT;
+      else if('\u00B7\u2192\u2713\u2714'.indexOf(ch)>=0) d=BASE_CHAR*SYMBOL_MULT;
+      else if(ch===' ') d=BASE_CHAR*SPACE_MULT;
+      else if(ch==='\n') d=BASE_CHAR*0.1;
+      /* Slight random jitter for natural feel */
+      d=d*(0.8+Math.random()*0.4);
+      setTimeout(function(){processing=false;drainQueue()},d);
+
+    }else if(evt.type==='finish'){
+      /* Done: flush remaining chars instantly, remove cursor */
+      while(eventQ.length>0){
+        var e=eventQ.shift();
+        if(e.type==='char'&&currentTextSpan){
+          currentTextSpan.insertAdjacentText('beforeend',e.ch);
+        }else if(e.type==='step'){
+          /* Create the line but don't animate */
+          var container2=document.getElementById('skill-lines-'+skillKey);
+          if(container2){
+            var pc=container2.querySelector('.think-cursor');
+            if(pc) pc.remove();
+            var ln=document.createElement('div');ln.className='think-line show';
+            var ls=document.createElement('span');ls.className='tl-label '+(e.label||'search');
+            ls.textContent=LABEL_MAP[e.label]||e.label||'检索';ln.appendChild(ls);
+            var ts=document.createElement('span');ts.className='tl-text';ln.appendChild(ts);
+            container2.appendChild(ln);
+            currentTextSpan=ts;
+          }
+        }
+      }
+      var container3=document.getElementById('skill-lines-'+skillKey);
+      if(container3){
+        var lastCursor=container3.querySelector('.think-cursor');
+        if(lastCursor) lastCursor.remove();
+      }
+      var statusEl=document.getElementById('skill-status-'+skillKey);
+      if(statusEl) statusEl.classList.add('done');
+      processing=false;
+      if(doneResolve){ doneResolve(); doneResolve=null; }
+    }
+  }
+
+  var self={
+    get paused(){ return _paused; },
+    set paused(v){ _paused=v; },
+    resumeQueue:function(){ drainQueue(); },
+    onStep:function(label){
+      enqueue({type:'step',label:label});
+    },
+    onDelta:function(text){
+      if(!text) return;
+      for(var i=0;i<text.length;i++){
+        enqueue({type:'char',ch:text[i]});
+      }
+    },
+    onDone:function(){
+      enqueue({type:'finish'});
+    },
+    whenVisualDone:function(){
+      return new Promise(function(resolve){
+        if(eventQ.length===0&&!processing){ resolve(); return; }
+        doneResolve=resolve;
+      });
+    }
+  };
+  return self;
+}
+
+async function runAllSkills(cat,cap,city,innerEl){
+  var params={category:cat,capacity:cap,city:city};
+  var results={};
+  var skillCallbacks={}; /* cb objects keyed by skill key */
+  var mockFns=[runMockBuyerMatch,runMockMarketEstimate,runMockOrderForecast,runMockCompetition];
+
+  /* Launch all 4 SSE fetches in parallel (for network speed).
+     Each callback queue is paused — data accumulates silently. */
+  var sseResultPromises=[];
+  for(var k=0;k<SKILL_DEFS.length;k++){
+    (function(idx){
+      var sd=SKILL_DEFS[idx];
+      var cb=makeSkillCallbacks(sd.key);
+      cb.paused=true;
+      skillCallbacks[sd.key]=cb;
+      var p=runSkillSSE(sd.endpoint,params,cb).then(function(result){
+        return{ok:true,result:result,cb:cb};
+      }).catch(function(err){
+        console.log('Skill SSE failed ('+sd.key+'):',err.message,', using MOCK');
+        return{ok:false,err:err,skillIdx:idx};
+      });
+      sseResultPromises.push(p);
+    })(k);
+  }
+
+  /* Serial visual display: show one skill at a time, wait for its
+     typewriter queue to fully drain, then move to the next skill. */
+  for(var si=0;si<SKILL_DEFS.length;si++){
+    var sd=SKILL_DEFS[si];
+
+    /* Create and reveal the skill section */
+    var section=createSkillSection(sd);
+    innerEl.appendChild(section);
+    requestAnimationFrame(function(s){return function(){s.classList.add('show')}}(section));
+    scrollBottom();
+
+    /* Unpause this skill's queue so typewriter starts */
+    var cb=skillCallbacks[sd.key];
+    if(cb){ cb.paused=false; cb.resumeQueue(); }
+
+    /* Wait for this skill's SSE data AND visual queue to finish */
+    var sseResult=await sseResultPromises[si];
+    if(!sseResult.ok){
+      /* SSE failed — clear partial lines and run MOCK */
+      var container=document.getElementById('skill-lines-'+sd.key);
+      if(container) container.innerHTML='';
+      var statusEl=document.getElementById('skill-status-'+sd.key);
+      if(statusEl) statusEl.classList.remove('done');
+      var cb2=makeSkillCallbacks(sd.key);
+      results[sd.key]=await mockFns[si](cat,cap,city,cb2);
+    }else{
+      /* Wait for visual queue to drain (typewriter finishes) */
+      await sseResult.cb.whenVisualDone();
+      results[sd.key]=sseResult.result;
+    }
+
+    /* Small pause between skills for breathing room */
+    if(si<SKILL_DEFS.length-1){
+      await delay(500);
+    }
+  }
+
+  return results;
+}
+
+/* --- MATCH BUTTON --- */
+document.getElementById('matchBtn').addEventListener('click',function(){
+  var cat=document.getElementById('inCat').value;
+  var cap=document.getElementById('inCap').value;
+  var city=document.getElementById('inCity').value;
+  if(!cat){document.getElementById('inCat').classList.add('error');showToast('请选择产品类目','error');return}
+  if(!cap){document.getElementById('inCap').classList.add('error');showToast('请选择月产能','error');return}
+  if(!city){document.getElementById('inCity').classList.add('error');showToast('请选择城市','error');return}
+  savedCat=cat;savedCap=cap;savedCity=city;
+  document.getElementById('formCard').style.display='none';
+  addMsg('user',cat+' / '+cap+' / '+city);
+  runSequence(cat,cap,city);
+});
+document.querySelectorAll('.form-select').forEach(function(s){s.addEventListener('focus',function(){this.classList.remove('error')})});
+
+/* --- MAIN SEQUENCE --- */
+async function runSequence(cat,cap,city){
+  /* 1. Thinking dots */
+  addMsg('thinking');
+  await delay(1500);
+  removeThinking();
+
+  /* 2. Create think block with 4 skill sections */
+  var thinkStartTime=Date.now();
+  var thinkMsg=addMsg('ai',
+    '<div class="think-block" id="thinkBlock">'
+      +'<div class="think-toggle open" id="thinkToggle"><div class="think-spinner"></div><span id="thinkLabel">思考中...</span><span class="think-toggle-icon">\u25B8</span></div>'
+      +'<div class="think-body open" id="thinkBody"><div class="think-inner" id="thinkInner"></div></div>'
+    +'</div>'
+  );
+  scrollBottom();
+
+  document.getElementById('thinkToggle').addEventListener('click',function(){
+    this.classList.toggle('open');
+    document.getElementById('thinkBody').classList.toggle('open');
+  });
+
+  var inner=document.getElementById('thinkInner');
+
+  /* 3. Run all 4 skills in parallel */
+  var skillResults=await runAllSkills(cat,cap,city,inner);
+
+  /* Extract data from each skill */
+  var buyerData=skillResults['buyer-match']||{};
+  var marketData=skillResults['market-estimate']||{};
+  var orderData=skillResults['order-forecast']||{};
+  var competitionData=skillResults['competition']||{};
+
+  /* Build metrics from market-estimate result */
+  var metrics;
+  if(marketData.exposure){
+    metrics=marketData;
+  }else{
+    var fb=MOCK_DB[cat]||DEFAULT_DATA;
+    var m=capMultiplier(cap);
+    metrics={exposure:Math.round(fb.exposure*m),inquiries:Math.round(fb.inquiries*m),cycle:fb.cycle,topBuyers:fb.topBuyers,avgOrder:fb.avgOrder};
+  }
+
+  /* Build timeline data from buyer-match and order-forecast results */
+  var timelineData={
+    leads:buyerData.leads||[],
+    clients:buyerData.clients||[],
+    orders:(orderData.orders)||[],
+    revenue:(orderData.revenue)||[],
+    partnership:(orderData.partnership)||{buyer:'GlobalTech',terms:'框架协议 $18K/月'}
+  };
+
+  /* Stop breathing animation */
+  document.getElementById('thinkBlock').classList.add('done-anim');
+
+  /* 4. Collapse think block */
+  await delay(1000);
+  var toggle=document.getElementById('thinkToggle');
+  var thinkElapsed=((Date.now()-thinkStartTime)/1000).toFixed(1);
+  toggle.classList.add('done');
+  toggle.classList.remove('open');
+  document.getElementById('thinkBody').classList.remove('open');
+  document.getElementById('thinkLabel').textContent='已分析完成 · 4个技能 · 耗时 '+thinkElapsed+'s';
+  await delay(1000);
+
+  /* 5. Thinking dots before result */
+  addMsg('thinking');
+  await delay(1400);
+  removeThinking();
+
+  /* 6. Exposure result card (from market-estimate) */
+  var expoHtml='根据「<b>'+cat+'</b>」行业数据，入驻后你的工厂每月预期：'
+    +'<div class="expo-card">'
+    +'<div class="expo-card-title">月度预期数据</div>'
+    +'<div class="expo-row">'
+    +'<div class="expo-item"><div class="expo-num" id="expoNum">0</div><div class="expo-unit">采购商曝光</div></div>'
+    +'<div class="expo-item"><div class="expo-num" id="inqNum">0</div><div class="expo-unit">预期询盘</div></div>'
+    +'<div class="expo-item"><div class="expo-num" style="font-size:20px;margin-top:6px">'+metrics.cycle+'</div><div class="expo-unit">平均首单周期</div></div>'
+    +'</div>'
+    +'<div class="expo-note">数据基于'+metrics.topBuyers.join('、')+'等地区在库采购商 · 产能 '+cap+'</div>'
+    +'</div>';
+  addMsg('ai',expoHtml);
+  scrollBottom();
+
+  animateNum(document.getElementById('expoNum'),0,metrics.exposure,1200);
+  animateNum(document.getElementById('inqNum'),0,metrics.inquiries,1200);
+  await delay(2000);
+
+  /* 7. Competition insight card (from competition skill) */
+  if(competitionData.factoryCount){
+    addMsg('thinking');
+    await delay(800);
+    removeThinking();
+
+    var compHtml='<div class="competition-insight" id="compInsight">'
+      +'<div class="ci-title">\u2694\uFE0F 竞争洞察</div>'
+      +'<div class="ci-row">'+city+'同品类工厂 <b>'+competitionData.factoryCount+'</b> 家 · 竞争度<b>'+competitionData.competitionLevel+'</b></div>'
+      +'<div class="ci-row">FOB均价区间：'+competitionData.priceRange+'</div>'
+      +'<div class="ci-row">你的优势：<b>'+competitionData.advantage+'</b></div>'
+      +'<div class="ci-row" style="color:var(--orange);font-weight:600">'+competitionData.suggestion+'</div>'
+      +'</div>';
+    addMsg('ai',compHtml);
+    await delay(300);
+    var compEl=document.getElementById('compInsight');
+    if(compEl) compEl.classList.add('show');
+    scrollBottom();
+    await delay(1200);
+  }
+
+  /* 8. Timeline intro */
+  addMsg('thinking');
+  await delay(1000);
+  removeThinking();
+
+  addMsg('ai','这是入驻后你会经历的过程：');
+  await delay(800);
+
+  var tlMsg=addMsg('ai','');
+  var bubble=tlMsg.querySelector('.msg-bubble');
+  bubble.innerHTML='<div class="timeline" id="timeline"></div>';
+
+  await buildTimeline(metrics,timelineData);
+
+  /* 9. CTA */
+  await delay(1000);
+  addMsg('thinking');
+  await delay(1200);
+  removeThinking();
+
+  addMsg('ai',
+    '以上就是入驻后的完整路径。<br><br>留下联系方式，我们会邀请你加入行业社群，并安排顾问协助你完成建档：'
+    +'<div class="cta-card" id="ctaCard">'
+    +'<div class="cta-field"><div class="cta-label"><span class="req">*</span> 手机号</div><input class="cta-input" id="inputPhone" type="tel" placeholder="用于接收采购商询盘" maxlength="11"></div>'
+    +'<div class="cta-field"><div class="cta-label"><span class="req">*</span> 公司名称</div><input class="cta-input" id="inputCompany" placeholder="工厂 / 贸易公司名称"></div>'
+    +'<div class="cta-field"><div class="cta-label"><span class="req">*</span> 联系人</div><input class="cta-input" id="inputContact" placeholder="怎么称呼"></div>'
+    +'<button class="btn-submit" id="submitBtn">加入社群 · 开始建档</button>'
+    +'<div class="cta-promise">完全免费 · 信息保密 · 专属顾问1v1协助</div>'
+    +'</div>'
+  );
+  scrollBottom();
+
+  document.getElementById('submitBtn').addEventListener('click',handleSubmit);
+  document.querySelectorAll('.cta-input').forEach(function(i){i.addEventListener('focus',function(){this.classList.remove('error')})});
+}
+
+/* --- DATA-DRIVEN TIMELINE BUILDER --- */
+async function buildTimeline(metrics,td){
+  var tl=document.getElementById('timeline');
+
+  /* ====== PHASE 1: 0-4 weeks ====== */
+  var p1=createPhase('0-4 周','建立数字档案','');
+  tl.appendChild(p1.el);
+  await delay(600);
+  p1.el.classList.add('show','active');
+  scrollBottom();
+
+  /* Scattered document pile */
+  var pile=document.createElement('div');
+  pile.className='doc-pile';
+  pile.style.overflow='visible';
+  var files=[
+    {cls:'pdf',name:'报价单.pdf',x:2,y:5,r:-6,h:42},
+    {cls:'xls',name:'产品规格.xlsx',x:55,y:10,r:4,h:40},
+    {cls:'ppt',name:'公司介绍.pptx',x:110,y:3,r:-3,h:44},
+    {cls:'doc',name:'资质证明.docx',x:35,y:48,r:7,h:40},
+    {cls:'img',name:'车间照片.jpg',x:95,y:50,r:-5,h:38},
+    {cls:'pdf',name:'检测报告.pdf',x:165,y:12,r:2,h:40}
+  ];
+  files.forEach(function(f){
+    var el=document.createElement('div');
+    el.className='doc-file '+f.cls;
+    el.style.cssText='left:'+f.x+'px;top:'+f.y+'px;transform:rotate('+f.r+'deg);height:'+f.h+'px;--tx:'+(100-f.x)+'px;--ty:'+(40-f.y)+'px';
+    el.innerHTML='<div class="doc-file-bar"><span></span><span></span><span></span></div>'
+      +'<div class="doc-file-body"><div class="doc-file-line" style="width:80%"></div><div class="doc-file-line" style="width:60%"></div><div class="doc-file-line" style="width:70%"></div></div>'
+      +'<div class="doc-file-name">'+f.name+'</div>';
+    pile.appendChild(el);
+  });
+  p1.body.appendChild(pile);
+
+  for(var i=0;i<pile.children.length;i++){
+    await delay(350);
+    pile.children[i].classList.add('show');
+    scrollBottom();
+  }
+  await delay(1200);
+
+  /* Collapse documents */
+  pile.style.overflow='hidden';
+  Array.from(pile.children).forEach(function(f){f.classList.add('collapse')});
+  await delay(1000);
+  pile.style.height='0';
+  pile.style.margin='0';
+  pile.style.transition='height .4s ease, margin .4s ease';
+  await delay(400);
+  pile.remove();
+
+  /* Merge spinner */
+  var merge=document.createElement('div');
+  merge.className='merge-line';
+  merge.innerHTML='<div class="merge-line-inner"><div class="merge-spinner"></div>AI 正在整理归档...</div>';
+  p1.body.appendChild(merge);
+  await delay(200);
+  merge.classList.add('show');
+  scrollBottom();
+  await delay(2000);
+  merge.querySelector('.merge-line-inner').innerHTML='\u2713 归档完成';
+  merge.querySelector('.merge-line-inner').style.color='var(--green)';
+  await delay(600);
+
+  /* Build info card */
+  var card=document.createElement('div');
+  card.className='built-card';
+  card.innerHTML=
+    '<div class="bc-head">'
+      +'<div class="bc-logo">厂</div>'
+      +'<div class="bc-title"><div class="bc-name">你的工厂</div><div class="bc-loc">'+savedCity+' · '+savedCat+'</div></div>'
+      +'<span class="bc-badge">已认证</span>'
+    +'</div>'
+    +'<div class="bc-row" id="bcTags"></div>'
+    +'<div class="bc-stats">'
+      +'<div class="bc-stat"><div class="bc-stat-num" id="bcExpo">0</div><div class="bc-stat-label">月曝光</div></div>'
+      +'<div class="bc-stat"><div class="bc-stat-num" id="bcInq">0</div><div class="bc-stat-label">月询盘</div></div>'
+      +'<div class="bc-stat"><div class="bc-stat-num" style="color:var(--green)">'+metrics.cycle+'</div><div class="bc-stat-label">预计首单</div></div>'
+    +'</div>';
+  p1.body.appendChild(card);
+  await delay(400);
+  card.classList.add('show');
+  scrollBottom();
+
+  /* Tags */
+  var tagBox=document.getElementById('bcTags');
+  var tags=[savedCat,'产能 '+savedCap,'资料完整','已验厂','接受样品单'];
+  for(var t=0;t<tags.length;t++){
+    await delay(300);
+    var tag=document.createElement('span');
+    tag.className='bc-tag';
+    tag.textContent=tags[t];
+    tagBox.appendChild(tag);
+    await delay(80);
+    tag.classList.add('show');
+  }
+
+  animateNum(document.getElementById('bcExpo'),0,metrics.exposure,1000);
+  animateNum(document.getElementById('bcInq'),0,metrics.inquiries,1000);
+  await delay(1200);
+
+  /* Lead notifications - from buyer-match */
+  var feed=document.createElement('div');
+  feed.className='lead-feed';
+  p1.body.appendChild(feed);
+
+  var leads=(td&&td.leads)||[];
+  var leadDotMap={view:'blue',inquiry:'orange',fav:'purple'};
+  for(var l=0;l<leads.length;l++){
+    await delay(800);
+    var ld=leads[l];
+    var dotCls=leadDotMap[ld.type]||'blue';
+    var notif=document.createElement('div');
+    notif.className='lead-notif '+(ld.type||'view');
+    notif.innerHTML='<span class="ln-icon">'+(ld.icon||'\uD83C\uDFF3\uFE0F')+'</span>'
+      +'<div class="ln-body"><div class="ln-text">'+(ld.name||'')+' '+(ld.action||'')+'</div><div class="ln-meta">'+(ld.country||'')+' · '+(ld.industry||'')+' · '+(ld.time||'')+'</div></div>'
+      +'<span class="ln-dot '+dotCls+'"></span>';
+    feed.appendChild(notif);
+    await delay(120);
+    notif.classList.add('show');
+    scrollBottom();
+  }
+
+  p1.el.classList.remove('active');p1.el.classList.add('done');
+  await delay(900);
+
+  /* ====== PHASE 2: 4-8 weeks ====== */
+  var p2=createPhase('4-8 周','从客资中筛选高意向客户','');
+  tl.appendChild(p2.el);
+  await delay(500);
+  p2.el.classList.add('show','active');
+  scrollBottom();
+
+  var clientList=document.createElement('div');
+  clientList.className='client-list';
+
+  var clients=(td&&td.clients)||[];
+  var intentLabels={high:'高意向',mid:'观望中',low:'低意向'};
+  p2.body.appendChild(clientList);
+
+  for(var c=0;c<clients.length;c++){
+    await delay(500);
+    var cl=clients[c];
+    var intentCls=cl.intent||'mid';
+    var intentText=intentLabels[intentCls]||cl.intent||'观望中';
+    var cc=document.createElement('div');
+    cc.className='client-card';
+    cc.id='cc'+c;
+    cc.innerHTML='<div class="cc-avatar">'+(cl.flag||'\uD83C\uDFF3\uFE0F')+'</div>'
+      +'<div class="cc-info"><div class="cc-name">'+(cl.name||'')+'</div><div class="cc-detail">'+(cl.detail||'')+'</div></div>'
+      +'<span class="cc-intent '+intentCls+'">'+intentText+'</span>';
+    clientList.appendChild(cc);
+    await delay(120);
+    cc.classList.add('show');
+    scrollBottom();
+  }
+  await delay(1000);
+
+  /* Filter animation */
+  var filterLabel=document.createElement('div');
+  filterLabel.className='filter-label';
+  filterLabel.textContent='AI 筛选中...过滤低意向客资';
+  p2.body.appendChild(filterLabel);
+  await delay(300);
+  filterLabel.classList.add('show');
+  await delay(1000);
+
+  var highCount=0;
+  for(var d=0;d<clients.length;d++){
+    var el=document.getElementById('cc'+d);
+    if(el){
+      if(clients[d].intent==='high'){
+        el.classList.add('highlight');
+        highCount++;
+      }else{
+        el.classList.add('dimmed');
+      }
+    }
+  }
+  await delay(800);
+  filterLabel.textContent='\u2713 筛选出 '+highCount+' 个高意向客户';
+  filterLabel.style.color='var(--green)';
+  scrollBottom();
+
+  p2.el.classList.remove('active');p2.el.classList.add('done');
+  await delay(900);
+
+  /* ====== PHASE 3: 8-18 weeks ====== */
+  var p3=createPhase('8-18 周','碎片化订单 + 样品单','');
+  tl.appendChild(p3.el);
+  await delay(500);
+  p3.el.classList.add('show','active');
+  scrollBottom();
+
+  var orderFeed=document.createElement('div');
+  orderFeed.className='order-feed';
+
+  var orders=(td&&td.orders)||[];
+  var orderIconClsMap={'样品单':'sample','试单':'trial','小批量':'sample','返单':'reorder'};
+  var orderAmountClsMap={'样品单':'blue','试单':'orange','小批量':'blue','返单':'green'};
+  p3.body.appendChild(orderFeed);
+
+  for(var o=0;o<orders.length;o++){
+    await delay(900);
+    var od=orders[o];
+    var oIconCls=orderIconClsMap[od.type]||'sample';
+    var oAmtCls=orderAmountClsMap[od.type]||'blue';
+    var on=document.createElement('div');
+    on.className='order-notif';
+    on.innerHTML='<div class="on-icon '+oIconCls+'">'+(od.icon||'\uD83D\uDCE6')+'</div>'
+      +'<div class="on-body"><div class="on-title">'+(od.buyer||'')+'</div><div class="on-detail">'+(od.type||'')+' · '+(od.detail||'')+'</div><div class="on-time">'+(od.week||'')+'</div></div>'
+      +'<div class="on-amount '+oAmtCls+'">'+(od.amount||'')+'</div>';
+    orderFeed.appendChild(on);
+    await delay(150);
+    on.classList.add('show');
+    scrollBottom();
+  }
+
+  p3.el.classList.remove('active');p3.el.classList.add('done');
+  await delay(900);
+
+  /* ====== PHASE 4: 18+ weeks ====== */
+  var p4=createPhase('18 周+','稳定 OEM 批发订单','');
+  tl.appendChild(p4.el);
+  await delay(500);
+  p4.el.classList.add('show','active');
+  scrollBottom();
+
+  /* Revenue chart */
+  var chart=document.createElement('div');
+  chart.className='rev-chart';
+  var revenueData=(td&&td.revenue)||[
+    {month:'M1',value:0},{month:'M2',value:0.8},{month:'M3',value:3.2},{month:'M4',value:5.8},
+    {month:'M5',value:12},{month:'M6',value:18},{month:'M7',value:25},{month:'M8',value:32}
+  ];
+  var maxVal=0;
+  revenueData.forEach(function(r){if(r.value>maxVal) maxVal=r.value});
+  var maxH=60;
+  var barColors=['#ddd','#ccc','var(--blue)','var(--blue)','var(--orange)','var(--orange)','var(--orange-dark)','var(--green)'];
+
+  revenueData.forEach(function(m,idx){
+    var h=maxVal>0?Math.round((m.value/maxVal)*maxH):0;
+    if(m.value>0&&h<4) h=4;
+    var color=barColors[idx]||'var(--blue)';
+    var bar=document.createElement('div');
+    bar.className='rev-bar';
+    bar.style.cssText='height:0;background:'+color;
+    bar.innerHTML='<span class="rev-bar-val">$'+m.value+'K</span>';
+    bar.setAttribute('data-h',h);
+    chart.appendChild(bar);
+  });
+  p4.body.appendChild(chart);
+  scrollBottom();
+
+  /* Animate bars */
+  await delay(400);
+  var barEls=chart.querySelectorAll('.rev-bar');
+  for(var b=0;b<barEls.length;b++){
+    var targetH=parseInt(barEls[b].getAttribute('data-h'))||0;
+    barEls[b].style.height=targetH+'px';
+    await delay(250);
+    if(revenueData[b]&&revenueData[b].value>0){
+      barEls[b].querySelector('.rev-bar-val').classList.add('show');
+    }
+    scrollBottom();
+  }
+  await delay(800);
+
+  /* Partnership card */
+  var partnerData=(td&&td.partnership)||{buyer:'GlobalTech',terms:'框架协议 $18K/月'};
+  var pc=document.createElement('div');
+  pc.className='partnership-card';
+  pc.innerHTML='<div class="pc-icon">\uD83E\uDD1D</div>'
+    +'<div class="pc-body"><div class="pc-title">长期OEM合作建立</div><div class="pc-detail">'+partnerData.buyer+' · '+partnerData.terms+'</div></div>';
+  p4.body.appendChild(pc);
+  await delay(600);
+  pc.classList.add('show');
+  scrollBottom();
+
+  p4.el.classList.remove('active');p4.el.classList.add('done');
+  scrollBottom();
+}
+
+function createPhase(week,title,desc){
+  var el=document.createElement('div');
+  el.className='tl-phase';
+  var body=document.createElement('div');
+  body.className='tl-body';
+  el.innerHTML='<div class="tl-dot"></div><div class="tl-header"><span class="tl-week">'+week+'</span><span class="tl-title">'+title+'</span></div>';
+  var descEl=document.createElement('div');
+  descEl.className='tl-desc';
+  descEl.textContent=desc;
+  body.appendChild(descEl);
+  el.appendChild(body);
+  return {el:el,body:body};
+}
+
+/* --- SUBMIT --- */
+async function handleSubmit(){
+  var btn=document.getElementById('submitBtn');
+  var ph=document.getElementById('inputPhone').value.trim();
+  var co=document.getElementById('inputCompany').value.trim();
+  var ct=document.getElementById('inputContact').value.trim();
+  var ok=true;
+  if(!/^1[3-9]\d{9}$/.test(ph)){document.getElementById('inputPhone').classList.add('error');ok=false}
+  if(!co||co.length<2){document.getElementById('inputCompany').classList.add('error');ok=false}
+  if(!ct){document.getElementById('inputContact').classList.add('error');ok=false}
+  if(!ok){showToast('请完善联系信息','error');return}
+
+  btn.disabled=true;btn.textContent='提交中...';
+  addMsg('user',co+' / '+ct+' / '+ph.replace(/(\d{3})\d{4}(\d{4})/,'$1****$2'));
+
+  addMsg('thinking');
+  await delay(800);
+  removeThinking();
+
+  try{
+    var payload={company_name:co,contact:ct,phone:ph,country:'CN',category:savedCat,capacity:savedCap,city:savedCity};
+    var res=await fetch(API_BASE+'/api/invite/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    if(res.ok){
+      var rd=await res.json();
+      addMsg('ai','提交成功。你的专属顾问会在 2 小时内联系你，协助完成建档并邀请你加入「'+savedCat+'」行业社群。');
+      scrollBottom();
+      await delay(2000);
+      window.location.href=API_BASE+'/static/onboarding.html?factory_id='+(rd.factory_id||'');
+    }else{
+      var ed=await res.json().catch(function(){return{}});
+      addMsg('ai','提交遇到问题：'+(ed.detail||ed.error||'请稍后重试'));
+      btn.disabled=false;btn.textContent='加入社群 · 开始建档';
+    }
+  }catch(e){
+    addMsg('ai','网络连接出错，请检查网络后重试。');
+    btn.disabled=false;btn.textContent='加入社群 · 开始建档';
+  }
+  scrollBottom();
+}
+</script>
+</body>
+</html>
