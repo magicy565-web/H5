@@ -236,6 +236,46 @@ body{font-family:var(--font);background:var(--bg);color:var(--text-primary);line
 .pc-title{font-size:12px;font-weight:700;color:var(--orange)}
 .pc-detail{font-size:10px;color:var(--text-secondary)}
 
+/* === HIGH POTENTIAL BUYERS === */
+.hp-card{background:linear-gradient(135deg,#1a1a2e,#16213e);border-radius:var(--radius);padding:16px;margin:8px 0;color:#fff}
+.hp-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.hp-title{font-size:13px;font-weight:700;display:flex;align-items:center;gap:6px}
+.hp-title-icon{font-size:16px}
+.hp-badge{font-size:10px;padding:2px 8px;border-radius:10px;background:rgba(255,107,53,.2);color:var(--orange);font-weight:600}
+.hp-stats{display:flex;gap:16px;margin-bottom:14px;padding:10px;background:rgba(255,255,255,.06);border-radius:var(--radius-sm)}
+.hp-stat{text-align:center;flex:1}
+.hp-stat-num{font-size:20px;font-weight:900;color:var(--orange);font-variant-numeric:tabular-nums}
+.hp-stat-label{font-size:9px;opacity:.5;margin-top:2px}
+.hp-filters{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+.hp-filter{font-size:10px;padding:3px 10px;border-radius:12px;border:1px solid rgba(255,255,255,.15);background:transparent;color:rgba(255,255,255,.6);cursor:pointer;transition:all .2s}
+.hp-filter.active{border-color:var(--orange);background:rgba(255,107,53,.15);color:var(--orange)}
+.hp-list{display:flex;flex-direction:column;gap:6px;max-height:360px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.15) transparent}
+.hp-list::-webkit-scrollbar{width:3px}
+.hp-list::-webkit-scrollbar-thumb{background:rgba(255,255,255,.15);border-radius:2px}
+.hp-buyer{display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(255,255,255,.05);border-radius:var(--radius-sm);border:1px solid transparent;transition:all .3s ease;opacity:0;transform:translateY(8px)}
+.hp-buyer.show{opacity:1;transform:translateY(0)}
+.hp-buyer.score4{border-color:rgba(255,107,53,.4);background:rgba(255,107,53,.08)}
+.hp-buyer.score3{border-color:rgba(255,165,0,.3);background:rgba(255,165,0,.05)}
+.hp-buyer-flag{font-size:16px;flex-shrink:0}
+.hp-buyer-info{flex:1;min-width:0}
+.hp-buyer-name{font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hp-buyer-meta{font-size:9px;opacity:.5;margin-top:1px;display:flex;gap:6px;flex-wrap:wrap}
+.hp-buyer-tags{display:flex;gap:3px;flex-shrink:0;flex-wrap:wrap}
+.hp-buyer-tag{font-size:8px;padding:1px 5px;border-radius:3px;font-weight:600}
+.hp-buyer-tag.freq{background:rgba(59,130,246,.2);color:#60a5fa}
+.hp-buyer-tag.verified{background:rgba(0,181,120,.2);color:#4ade80}
+.hp-buyer-tag.active{background:rgba(255,107,53,.2);color:#ff8a5c}
+.hp-buyer-tag.big{background:rgba(139,92,246,.2);color:#a78bfa}
+.hp-score{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;flex-shrink:0}
+.hp-score.s4{background:var(--orange);color:#fff}
+.hp-score.s3{background:rgba(255,165,0,.8);color:#fff}
+.hp-score.s2{background:rgba(255,255,255,.15);color:rgba(255,255,255,.7)}
+.hp-more{text-align:center;margin-top:10px}
+.hp-more-btn{font-size:11px;padding:6px 20px;border-radius:16px;border:1px solid rgba(255,255,255,.2);background:transparent;color:rgba(255,255,255,.7);cursor:pointer;transition:all .2s}
+.hp-more-btn:active{background:rgba(255,255,255,.1)}
+.hp-countries{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px}
+.hp-country{font-size:9px;padding:2px 6px;border-radius:4px;background:rgba(255,255,255,.06);color:rgba(255,255,255,.6)}
+
 /* CTA */
 .cta-card{background:var(--bg-white);border:1.5px solid var(--orange);border-radius:var(--radius);padding:16px;margin:8px 0}
 .cta-title{font-size:14px;font-weight:700;margin-bottom:2px}
@@ -383,7 +423,7 @@ track('page_view');
 /* --- MOCK INDUSTRY DATABASE --- */
 var MOCK_DB={
   '精密加工':{exposure:320,inquiries:18,cycle:'14天',topBuyers:['美国','德国','日本'],avgOrder:'$12K-45K'},
-  '注塑模具':{exposure:280,inquiries:15,cycle:'11天',topBuyers:['德国','英国','韩国'],avgOrder:'$8K-35K'},
+  '注塑模具':{exposure:380,inquiries:22,cycle:'11天',topBuyers:['越南','墨西哥','印度'],avgOrder:'$8K-35K'},
   '电子组装':{exposure:410,inquiries:24,cycle:'9天',topBuyers:['美国','日本','荷兰'],avgOrder:'$15K-60K'},
   '五金工具':{exposure:260,inquiries:14,cycle:'16天',topBuyers:['美国','澳洲','加拿大'],avgOrder:'$5K-25K'},
   '家居用品':{exposure:350,inquiries:20,cycle:'12天',topBuyers:['英国','美国','瑞典'],avgOrder:'$8K-30K'},
@@ -1121,7 +1161,10 @@ async function runSequence(cat,cap,city){
     await delay(800);
   }
 
-  /* 8. Timeline intro */
+  /* 8. High-potential buyers section */
+  await renderHighPotential(cat);
+
+  /* 9. Timeline intro */
   addMsg('thinking');
   await delay(1000);
   removeThinking();
@@ -1135,7 +1178,7 @@ async function runSequence(cat,cap,city){
 
   await buildTimeline(metrics,timelineData);
 
-  /* 9. CTA */
+  /* 10. CTA */
   await delay(1000);
   addMsg('thinking');
   await delay(1200);
@@ -1158,6 +1201,142 @@ async function runSequence(cat,cap,city){
 }
 
 /* --- DATA-DRIVEN TIMELINE BUILDER --- */
+/* --- HIGH POTENTIAL BUYERS RENDER --- */
+async function renderHighPotential(category){
+  addMsg('thinking');
+  await delay(800);
+  removeThinking();
+
+  var hpData=null;
+  try{
+    var res=await fetch(API_BASE+'/api/high-potential',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({category:category,page:1,pageSize:15,minScore:2})
+    });
+    if(res.ok) hpData=await res.json();
+  }catch(e){
+    console.warn('High potential fetch failed:',e);
+  }
+
+  if(!hpData||!hpData.buyers||!hpData.buyers.length) return;
+
+  var score4=hpData.scoreDist&&hpData.scoreDist['4']||0;
+  var score3=hpData.scoreDist&&hpData.scoreDist['3']||0;
+  var score2=hpData.scoreDist&&hpData.scoreDist['2']||0;
+
+  var countriesHtml='';
+  if(hpData.topCountries){
+    for(var i=0;i<Math.min(hpData.topCountries.length,6);i++){
+      var tc=hpData.topCountries[i];
+      countriesHtml+='<span class="hp-country">'+tc[0]+' '+tc[1]+'</span>';
+    }
+  }
+
+  var html='<div class="hp-card" id="hpCard">'
+    +'<div class="hp-header">'
+    +'<div class="hp-title"><span class="hp-title-icon">\uD83D\uDD25</span> \u9AD8\u6F5C\u529B\u91C7\u8D2D\u5546</div>'
+    +'<span class="hp-badge">'+hpData.total+' \u5BB6\u7B5B\u9009</span>'
+    +'</div>'
+    +'<div class="hp-stats">'
+    +'<div class="hp-stat"><div class="hp-stat-num">'+score4+'</div><div class="hp-stat-label">\u6781\u9AD8\u6F5C\u529B</div></div>'
+    +'<div class="hp-stat"><div class="hp-stat-num">'+score3+'</div><div class="hp-stat-label">\u9AD8\u6F5C\u529B</div></div>'
+    +'<div class="hp-stat"><div class="hp-stat-num">'+score2+'</div><div class="hp-stat-label">\u6F5C\u529B\u80A1</div></div>'
+    +'<div class="hp-stat"><div class="hp-stat-num">'+hpData.total+'</div><div class="hp-stat-label">\u603B\u7B5B\u9009</div></div>'
+    +'</div>'
+    +'<div class="hp-countries">'+countriesHtml+'</div>'
+    +'<div class="hp-list" id="hpList"></div>'
+    +'<div class="hp-more"><button class="hp-more-btn" id="hpMoreBtn">\u67E5\u770B\u66F4\u591A\u91C7\u8D2D\u5546 \u2192</button></div>'
+    +'</div>';
+
+  addMsg('ai','\u4ECE\u6570\u636E\u5E93\u4E2D\u7B5B\u9009\u51FA\u4E0E\u4F60\u5DE5\u5382\u9AD8\u5EA6\u5339\u914D\u7684\u91C7\u8D2D\u5546\uFF1A'+html);
+  scrollBottom();
+
+  var list=document.getElementById('hpList');
+  var tagMap={'\u91C7\u8D2D\u9891\u7387\u9AD8':'freq','\u5DF2\u9A8C\u8BC1\u591A\u8054\u7CFB\u4EBA':'verified','\u6D3B\u8DC3\u5EA6\u9AD8':'active','\u91C7\u8D2D\u89C4\u6A21\u5927':'big'};
+
+  for(var b=0;b<hpData.buyers.length;b++){
+    await delay(150);
+    var buyer=hpData.buyers[b];
+    var scoreCls=buyer.potentialScore>=4?'score4':buyer.potentialScore>=3?'score3':'';
+    var tagsHtml='';
+    if(buyer.potentialReasons){
+      for(var t=0;t<buyer.potentialReasons.length;t++){
+        var reason=buyer.potentialReasons[t];
+        var tagCls=tagMap[reason]||'freq';
+        tagsHtml+='<span class="hp-buyer-tag '+tagCls+'">'+reason+'</span>';
+      }
+    }
+    var el=document.createElement('div');
+    el.className='hp-buyer '+scoreCls;
+    el.innerHTML='<span class="hp-buyer-flag">'+buyer.flag+'</span>'
+      +'<div class="hp-buyer-info">'
+      +'<div class="hp-buyer-name">'+buyer.name+'</div>'
+      +'<div class="hp-buyer-meta"><span>'+buyer.country+' '+buyer.city+'</span><span>'+buyer.scale+'</span><span>'+buyer.annualProcurement+'</span></div>'
+      +'<div class="hp-buyer-tags">'+tagsHtml+'</div>'
+      +'</div>'
+      +'<div class="hp-score s'+buyer.potentialScore+'">'+buyer.potentialScore+'</div>';
+    list.appendChild(el);
+    await delay(60);
+    el.classList.add('show');
+    if(b%5===4) scrollBottom();
+  }
+  scrollBottom();
+
+  /* Load more button */
+  var currentPage=1;
+  var moreBtn=document.getElementById('hpMoreBtn');
+  if(moreBtn){
+    moreBtn.addEventListener('click',async function(){
+      currentPage++;
+      moreBtn.textContent='\u52A0\u8F7D\u4E2D...';
+      try{
+        var res2=await fetch(API_BASE+'/api/high-potential',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({category:category,page:currentPage,pageSize:15,minScore:2})
+        });
+        if(res2.ok){
+          var data2=await res2.json();
+          if(data2.buyers&&data2.buyers.length){
+            for(var b2=0;b2<data2.buyers.length;b2++){
+              var buyer2=data2.buyers[b2];
+              var sc2=buyer2.potentialScore>=4?'score4':buyer2.potentialScore>=3?'score3':'';
+              var tags2='';
+              if(buyer2.potentialReasons){
+                for(var t2=0;t2<buyer2.potentialReasons.length;t2++){
+                  var r2=buyer2.potentialReasons[t2];
+                  tags2+='<span class="hp-buyer-tag '+(tagMap[r2]||'freq')+'">'+r2+'</span>';
+                }
+              }
+              var el2=document.createElement('div');
+              el2.className='hp-buyer '+sc2;
+              el2.innerHTML='<span class="hp-buyer-flag">'+buyer2.flag+'</span>'
+                +'<div class="hp-buyer-info">'
+                +'<div class="hp-buyer-name">'+buyer2.name+'</div>'
+                +'<div class="hp-buyer-meta"><span>'+buyer2.country+' '+buyer2.city+'</span><span>'+buyer2.scale+'</span><span>'+buyer2.annualProcurement+'</span></div>'
+                +'<div class="hp-buyer-tags">'+tags2+'</div>'
+                +'</div>'
+                +'<div class="hp-score s'+buyer2.potentialScore+'">'+buyer2.potentialScore+'</div>';
+              list.appendChild(el2);
+              await delay(40);
+              el2.classList.add('show');
+            }
+            moreBtn.textContent='\u67E5\u770B\u66F4\u591A\u91C7\u8D2D\u5546 \u2192';
+            if(data2.buyers.length<15) moreBtn.textContent='\u5DF2\u52A0\u8F7D\u5168\u90E8';
+            scrollBottom();
+          }else{
+            moreBtn.textContent='\u5DF2\u52A0\u8F7D\u5168\u90E8';
+          }
+        }
+      }catch(e2){
+        moreBtn.textContent='\u52A0\u8F7D\u5931\u8D25\uFF0C\u70B9\u51FB\u91CD\u8BD5';
+      }
+    });
+  }
+  await delay(800);
+}
+
 async function buildTimeline(metrics,td){
   var tl=document.getElementById('timeline');
 

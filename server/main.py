@@ -113,13 +113,26 @@ async def llm_chat_stream(messages: list[dict], temperature: float = 0.7, max_to
 # Buyer database
 # ---------------------------------------------------------------------------
 BUYER_DB: dict[str, list] = {}
+HIGH_POTENTIAL_DB: dict[str, list] = {}  # industry -> high-potential buyers
 
 def load_buyer_db():
     """Load all industry JSON files into memory."""
     for f in DB_DIR.glob("*.json"):
         if f.name.startswith("_"):
             continue
-        industry = f.stem
+        stem = f.stem
+        # High-potential files: 注塑模具_高潜力.json -> stored separately
+        if "_高潜力" in stem:
+            industry = stem.replace("_高潜力", "")
+            with open(f, "r", encoding="utf-8") as fh:
+                data = json.load(fh)
+            if isinstance(data, dict) and "buyers" in data:
+                HIGH_POTENTIAL_DB[industry] = data["buyers"]
+            elif isinstance(data, list):
+                HIGH_POTENTIAL_DB[industry] = data
+            logger.info(f"Loaded high-potential: {industry} ({len(HIGH_POTENTIAL_DB.get(industry, []))} buyers)")
+            continue
+        industry = stem
         with open(f, "r", encoding="utf-8") as fh:
             data = json.load(fh)
         # Support both formats: raw list or {"buyers": [...]}
@@ -131,13 +144,17 @@ def load_buyer_db():
             logger.warning(f"Unexpected format in {f.name}")
             continue
     total = sum(len(v) for v in BUYER_DB.values())
-    logger.info(f"Loaded buyer DB: {len(BUYER_DB)} industries, {total} buyers")
+    hp_total = sum(len(v) for v in HIGH_POTENTIAL_DB.values())
+    logger.info(f"Loaded buyer DB: {len(BUYER_DB)} industries, {total} buyers, {hp_total} high-potential")
 
 # ---------------------------------------------------------------------------
 # Helper: sample buyers for context
 # ---------------------------------------------------------------------------
 def sample_buyers(category: str, capacity: str, city: str, n: int = 30) -> list[dict]:
-    """Sample relevant buyers to inject into LLM context."""
+    """Sample relevant buyers to inject into LLM context.
+    Prioritizes high-potential buyers when available."""
+    # Try high-potential pool first
+    hp_pool = HIGH_POTENTIAL_DB.get(category, [])
     pool = BUYER_DB.get(category, [])
     if not pool:
         # fuzzy match
@@ -148,15 +165,29 @@ def sample_buyers(category: str, capacity: str, city: str, n: int = 30) -> list[
     if not pool:
         pool = list(BUYER_DB.values())[0] if BUYER_DB else []
 
-    # Prefer high activity, verified buyers
-    scored = sorted(pool, key=lambda b: (
-        -b.get("activityScore", 0),
-        -int(b.get("verified", False)),
-        b.get("lastActiveDaysAgo", 999),
-    ))
-    top = scored[:min(n * 3, len(scored))]
-    sample = random.sample(top, min(n, len(top)))
-    return sample
+    # Mix: take half from high-potential, half from general pool
+    result = []
+    if hp_pool:
+        hp_sorted = sorted(hp_pool, key=lambda b: (
+            -b.get("potentialScore", 0),
+            -b.get("activityScore", 0),
+        ))
+        hp_sample = random.sample(hp_sorted[:min(n * 2, len(hp_sorted))], min(n // 2, len(hp_sorted)))
+        result.extend(hp_sample)
+
+    # Fill remaining from general pool
+    remaining = n - len(result)
+    if remaining > 0:
+        scored = sorted(pool, key=lambda b: (
+            -b.get("activityScore", 0),
+            -int(b.get("verified", False)),
+            b.get("lastActiveDaysAgo", 999),
+        ))
+        top = scored[:min(remaining * 3, len(scored))]
+        general_sample = random.sample(top, min(remaining, len(top)))
+        result.extend(general_sample)
+
+    return result
 
 
 def buyers_to_context(buyers: list[dict]) -> str:
@@ -840,8 +871,78 @@ async def health():
         "status": "ok",
         "industries": list(BUYER_DB.keys()),
         "total_buyers": sum(len(v) for v in BUYER_DB.values()),
+        "high_potential_industries": list(HIGH_POTENTIAL_DB.keys()),
+        "total_high_potential": sum(len(v) for v in HIGH_POTENTIAL_DB.values()),
         "models": [m[2] for m in LLM_FALLBACK_MODELS],
         "model_failures": {k: int(time.time() - v) for k, v in _model_failures.items()},
+    })
+
+
+@app.post("/api/high-potential")
+async def get_high_potential(request: Request):
+    """Return high-potential buyers for a given industry, with pagination."""
+    body = await request.json()
+    category = body.get("category", "注塑模具")
+    page = body.get("page", 1)
+    page_size = body.get("pageSize", 20)
+    min_score = body.get("minScore", 2)
+
+    pool = HIGH_POTENTIAL_DB.get(category, [])
+    if not pool:
+        # fuzzy match
+        for key, buyers in HIGH_POTENTIAL_DB.items():
+            if category in key or key in category:
+                pool = buyers
+                break
+
+    # Filter by minimum score
+    filtered = [b for b in pool if b.get("potentialScore", 0) >= min_score]
+    # Sort by score desc, then activity desc
+    filtered.sort(key=lambda b: (-b.get("potentialScore", 0), -b.get("activityScore", 0)))
+
+    total = len(filtered)
+    start = (page - 1) * page_size
+    end = start + page_size
+    page_data = filtered[start:end]
+
+    # Score distribution
+    score_dist = {}
+    for b in pool:
+        s = b.get("potentialScore", 0)
+        score_dist[s] = score_dist.get(s, 0) + 1
+
+    # Country distribution for filtered
+    country_dist = {}
+    for b in filtered:
+        c = b.get("country", "未知")
+        country_dist[c] = country_dist.get(c, 0) + 1
+    top_countries = sorted(country_dist.items(), key=lambda x: -x[1])[:8]
+
+    return JSONResponse({
+        "total": total,
+        "totalAll": len(pool),
+        "page": page,
+        "pageSize": page_size,
+        "scoreDist": score_dist,
+        "topCountries": top_countries,
+        "buyers": [{
+            "id": b.get("id", ""),
+            "name": b.get("name", ""),
+            "country": b.get("country", ""),
+            "flag": b.get("flag", ""),
+            "city": b.get("city", ""),
+            "scale": b.get("scale", ""),
+            "industry": b.get("industry", ""),
+            "annualProcurement": b.get("annualProcurement", ""),
+            "procurementFreq": b.get("procurementFreq", ""),
+            "products": b.get("products", [])[:3],
+            "activityScore": b.get("activityScore", 0),
+            "contactCount": b.get("contactCount", 0),
+            "verified": b.get("verified", False),
+            "potentialScore": b.get("potentialScore", 0),
+            "potentialReasons": b.get("potentialReasons", []),
+            "paymentTerms": b.get("paymentTerms", ""),
+        } for b in page_data]
     })
 
 
