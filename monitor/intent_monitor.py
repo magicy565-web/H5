@@ -17,6 +17,11 @@ from monitor.collectors import (
     RedditCollector,
     RSSCollector,
     TradeKeyCollector,
+    ApifyGoogleCollector,
+    ApifyLinkedInCollector,
+    ApifyFacebookCollector,
+    ApifyAlibabaCollector,
+    ApifyB2BCollector,
 )
 from monitor.collectors.base import RawSignal
 from monitor.config import SOURCES
@@ -32,6 +37,12 @@ _COLLECTOR_MAP: dict[str, type] = {
     "reddit": RedditCollector,
     "rss": RSSCollector,
     "tradekey": TradeKeyCollector,
+    # Apify premium collectors
+    "apify_google": ApifyGoogleCollector,
+    "apify_linkedin": ApifyLinkedInCollector,
+    "apify_facebook": ApifyFacebookCollector,
+    "apify_alibaba": ApifyAlibabaCollector,
+    "apify_b2b": ApifyB2BCollector,
 }
 
 

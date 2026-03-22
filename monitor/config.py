@@ -43,6 +43,9 @@ KEYWORDS_INDIRECT = [
     '"plant manager" "plastics manufacturing"',
 ]
 
+# --- Apify ---
+APIFY_API_TOKEN = os.getenv("APIFY_API_TOKEN", "")  # 填入你的 Apify API Token
+
 # --- Source Config ---
 SOURCES = {
     "google_search": {
@@ -67,6 +70,41 @@ SOURCES = {
             "https://www.plasticstoday.com/rss.xml",
             "https://www.plasticsnews.com/rss/all",
         ],
+    },
+    # --- Apify 高级爬虫 ---
+    "apify_google": {
+        "enabled": True,
+        "actor_id": "apify/google-search-scraper",
+        "max_results_per_keyword": 10,
+    },
+    "apify_linkedin": {
+        "enabled": True,
+        "actor_id": "curious_coder/linkedin-post-search-scraper",
+        "max_results": 50,
+    },
+    "apify_facebook": {
+        "enabled": True,
+        "actor_id": "apify/facebook-posts-scraper",
+        "pages": [
+            "InjectionMoldingMachines",
+            "PlasticMachineryManufacturers",
+        ],
+        "max_results": 50,
+    },
+    "apify_alibaba": {
+        "enabled": True,
+        "actor_id": "epctex/alibaba-scraper",
+        "max_results": 30,
+    },
+    "apify_b2b": {
+        "enabled": True,
+        "actor_id": "apify/web-scraper",
+        "targets": [
+            {"url": "https://www.go4worldbusiness.com/buy-leads/injection-molding-machine.html", "name": "go4world"},
+            {"url": "https://www.tradekey.com/buyoffer/injection-molding-machine.htm", "name": "tradekey"},
+            {"url": "https://www.exportersindia.com/indian-buyers/injection-moulding-machine.htm", "name": "exportersindia"},
+        ],
+        "max_pages": 3,
     },
 }
 
