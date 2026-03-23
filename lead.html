@@ -347,31 +347,89 @@ body{font-family:var(--font);background:var(--bg);color:var(--text-primary);line
     <!-- Status bar -->
     <div class="status-bar" id="status-bar"></div>
 
-    <!-- Follow-up template area -->
-    <div id="followup-area"></div>
-
-    <!-- Action buttons -->
-    <div class="actions">
-      <button class="btn btn-green" onclick="sendFollowup('en')">💬 English跟进</button>
-      <button class="btn btn-blue" onclick="sendFollowup('zh')">💬 中文跟进</button>
-      <button class="btn btn-purple" onclick="sendFollowup('whatsapp')">💬 WhatsApp</button>
-      <button class="btn btn-secondary" onclick="sendTodo()">📌 加入待办</button>
-      <button class="btn btn-secondary" onclick="copyLead()">📋 复制信息</button>
-      ${sourceUrl ? '<a class="btn btn-primary" href="' + escAttr(sourceUrl) + '" target="_blank" rel="noopener" style="text-decoration:none">🔗 查看原帖</a>' : ''}
-    </div>
+    <!-- Action buttons — dynamically generated based on contact type -->
+    <div class="actions" id="action-buttons"></div>
 
     <div class="timestamp">线索ID: ${escHtml(lead.id || lead.contentHash || '-')} · 快照生成于推送时刻</div>
   `;
 
   // ── API base URL ──
-  // Auto-detect: same origin when served by FastAPI, or configurable via ?api= query param
   var params = new URLSearchParams(location.search);
   var API_BASE = params.get('api') || (location.hostname === 'magicy565-web.github.io' ? '' : location.origin);
+
+  // ── Contact type detection ──
+  var contactRaw = lead.contactInfo || '';
+  var contactType = 'social'; // default: social media lead
+  var whatsappNum = '';
+  var emailAddr = '';
+
+  // Detect WhatsApp number
+  var waMatch = contactRaw.match(/whatsapp[:\s]*\+?(\d[\d\s\-]{7,})/i)
+    || contactRaw.match(/\+(\d{10,15})/);
+  if (waMatch) {
+    whatsappNum = waMatch[1].replace(/[\s\-]/g, '');
+    contactType = 'whatsapp';
+  }
+
+  // Detect email
+  var emailMatch = contactRaw.match(/([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})/);
+  if (emailMatch) {
+    emailAddr = emailMatch[1];
+    if (contactType !== 'whatsapp') contactType = 'email';
+  }
+
+  // Detect source type
+  var srcLower = (lead.source || '').toLowerCase();
+  var isSocial = /reddit|facebook|linkedin|twitter/i.test(srcLower);
+  var isB2B = /tradekey|go4world|alibaba|exportersindia|apify/i.test(srcLower);
+
+  // ── Build smart action buttons ──
+  var actionsEl = document.getElementById('action-buttons');
+  var btns = '';
+
+  if (contactType === 'whatsapp') {
+    // High-value lead: has WhatsApp
+    var waUrl = 'https://wa.me/' + whatsappNum;
+    btns += '<a class="btn btn-green btn-full" href="' + waUrl + '" target="_blank" rel="noopener" style="text-decoration:none" onclick="sendAction(\'whatsapp\')">📱 WhatsApp 联系买家</a>';
+    if (emailAddr) {
+      btns += '<a class="btn btn-blue" href="mailto:' + escAttr(emailAddr) + '" target="_blank" style="text-decoration:none" onclick="sendAction(\'email\')">📧 发送邮件</a>';
+    }
+    btns += '<button class="btn btn-secondary" onclick="sendAction(\'followup_en\')">💬 发话术到微信</button>';
+  } else if (contactType === 'email') {
+    // Standard lead: has email
+    var subj = encodeURIComponent('[Inquiry] ' + (lead.title || '').slice(0, 40));
+    var mailUrl = 'mailto:' + emailAddr + '?subject=' + subj;
+    btns += '<a class="btn btn-blue btn-full" href="' + mailUrl + '" target="_blank" style="text-decoration:none" onclick="sendAction(\'email\')">📧 邮件联系买家</a>';
+    btns += '<button class="btn btn-green" onclick="sendAction(\'followup_en\')">💬 英文话术</button>';
+    btns += '<button class="btn btn-secondary" onclick="sendAction(\'followup_zh\')">💬 中文话术</button>';
+  } else if (isSocial && sourceUrl) {
+    // Social media lead: Reddit/Facebook/LinkedIn
+    btns += '<a class="btn btn-primary btn-full" href="' + escAttr(sourceUrl) + '" target="_blank" rel="noopener" style="text-decoration:none" onclick="sendAction(\'reply_social\')">💬 去原帖回复买家</a>';
+    btns += '<button class="btn btn-green" onclick="sendAction(\'followup_en\')">📋 英文回复模板</button>';
+    btns += '<button class="btn btn-blue" onclick="sendAction(\'followup_zh\')">📋 中文回复模板</button>';
+  } else if (isB2B && sourceUrl) {
+    // B2B platform lead
+    btns += '<a class="btn btn-primary btn-full" href="' + escAttr(sourceUrl) + '" target="_blank" rel="noopener" style="text-decoration:none" onclick="sendAction(\'reply_b2b\')">🏢 去平台联系买家</a>';
+    btns += '<button class="btn btn-green" onclick="sendAction(\'followup_en\')">📋 英文话术</button>';
+    btns += '<button class="btn btn-blue" onclick="sendAction(\'followup_zh\')">📋 中文话术</button>';
+  } else {
+    // Fallback
+    if (sourceUrl) {
+      btns += '<a class="btn btn-primary" href="' + escAttr(sourceUrl) + '" target="_blank" rel="noopener" style="text-decoration:none">🔗 查看原帖</a>';
+    }
+    btns += '<button class="btn btn-green" onclick="sendAction(\'followup_en\')">💬 英文话术</button>';
+    btns += '<button class="btn btn-blue" onclick="sendAction(\'followup_zh\')">💬 中文话术</button>';
+  }
+
+  // Always show: todo + copy
+  btns += '<button class="btn btn-secondary" onclick="sendAction(\'todo\')">📌 加入待办</button>';
+  btns += '<button class="btn btn-secondary" onclick="copyLead()">📋 复制信息</button>';
+  actionsEl.innerHTML = btns;
 
   // ── Lead key for localStorage ──
   var leadKey = lead.id || lead.contentHash || btoa(lead.title || '').slice(0, 20);
 
-  // ── Status tracking (localStorage + API DM) ──
+  // ── Status tracking ──
   var STATUS_LIST = [
     { key: 'pending',   label: '待跟进', dot: 'status-dot-pending',   emoji: '🟡' },
     { key: 'contacted', label: '已联系', dot: 'status-dot-contacted', emoji: '🔵' },
@@ -390,10 +448,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text-primary);line
     var data = { status: statusKey, updatedAt: new Date().toISOString() };
     localStorage.setItem('lead_status_' + leadKey, JSON.stringify(data));
     renderStatusBar();
-    // Send DM via API
-    if (API_BASE) {
-      callAPI('/api/action/status', { lead: lead, status: statusKey });
-    }
+    if (API_BASE) { callAPI('/api/action/status', { lead: lead, status: statusKey }); }
     showToast(STATUS_LIST.find(function(s) { return s.key === statusKey; }).label + ' - 状态已更新');
   }
 
@@ -455,64 +510,50 @@ body{font-family:var(--font);background:var(--bg);color:var(--text-primary);line
     setTimeout(function() { t.remove(); }, 2500);
   }
 
-  // ── API call helper ──
+  // ── API call ──
   function callAPI(path, body) {
-    if (!API_BASE) {
-      showToast('API未配置，请设置api参数');
-      return Promise.resolve(null);
-    }
+    if (!API_BASE) { return Promise.resolve(null); }
     return fetch(API_BASE + path, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     })
     .then(function(r) { return r.json(); })
-    .catch(function(e) {
-      console.error('API call failed:', e);
-      showToast('请求失败: ' + e.message);
-      return null;
-    });
+    .catch(function(e) { console.error('API error:', e); return null; });
   }
 
-  // ── Send Follow-up DM (bot sends message to WeCom) ──
-  window.sendFollowup = function(lang) {
-    var langLabel = { en: 'English', zh: '中文', whatsapp: 'WhatsApp' }[lang] || lang;
-    showToast('正在生成' + langLabel + '跟进话术...');
-    callAPI('/api/action/followup', { lead: lead, lang: lang })
-      .then(function(data) {
-        if (data && data.ok) {
-          showToast('✅ ' + langLabel + '话术已发送到微信');
-        } else if (data) {
-          showToast('发送失败: ' + (data.error || '未知错误'));
-        }
-      });
-  };
+  // ── Unified action handler ──
+  window.sendAction = function(action) {
+    var actionMap = {
+      'whatsapp':     { api: '/api/action/followup', body: { lead: lead, lang: 'whatsapp', channel: 'whatsapp' }, toast: '📱 WhatsApp话术已推送到微信' },
+      'email':        { api: '/api/action/followup', body: { lead: lead, lang: 'en', channel: 'email' }, toast: '📧 邮件话术已推送到微信' },
+      'reply_social': { api: '/api/action/followup', body: { lead: lead, lang: 'en', channel: 'social' }, toast: '💬 回复模板已推送到微信' },
+      'reply_b2b':    { api: '/api/action/followup', body: { lead: lead, lang: 'en', channel: 'b2b' }, toast: '🏢 联系话术已推送到微信' },
+      'followup_en':  { api: '/api/action/followup', body: { lead: lead, lang: 'en' }, toast: '💬 英文话术已推送到微信' },
+      'followup_zh':  { api: '/api/action/followup', body: { lead: lead, lang: 'zh' }, toast: '💬 中文话术已推送到微信' },
+      'todo':         { api: '/api/action/todo', body: { lead: lead }, toast: '📌 待办已推送到微信' },
+    };
+    var cfg = actionMap[action];
+    if (!cfg) return;
 
-  // ── Send Todo DM (bot sends message to WeCom) ──
-  window.sendTodo = function() {
-    showToast('正在添加待办...');
-    callAPI('/api/action/todo', { lead: lead })
-      .then(function(data) {
-        if (data && data.ok) {
-          showToast('✅ 待办已推送到微信');
-          // Also save locally
-          var todos = [];
-          try { todos = JSON.parse(localStorage.getItem('lead_todos') || '[]'); } catch(e) {}
-          var exists = todos.some(function(t) { return t.key === leadKey; });
-          if (!exists) {
-            todos.unshift({
-              key: leadKey,
-              title: lead.title || '',
-              score: lead.intentScore,
-              country: lead.buyerCountry || '',
-              addedAt: new Date().toISOString(),
-            });
-            localStorage.setItem('lead_todos', JSON.stringify(todos));
-          }
-        } else if (data) {
-          showToast('发送失败: ' + (data.error || '未知错误'));
-        }
-      });
+    // Auto-update status to "已联系" for contact actions
+    if (['whatsapp', 'email', 'reply_social', 'reply_b2b'].indexOf(action) !== -1) {
+      setLeadStatus('contacted');
+    }
+
+    if (!API_BASE) {
+      showToast(cfg.toast.replace('已推送到微信', '(API未配置)'));
+      return;
+    }
+
+    showToast('正在推送...');
+    callAPI(cfg.api, cfg.body).then(function(data) {
+      if (data && data.ok) {
+        showToast(cfg.toast);
+      } else {
+        showToast('推送失败，请检查API配置');
+      }
+    });
   };
 
   // ── Copy lead info ──

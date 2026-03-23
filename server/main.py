@@ -991,33 +991,87 @@ def _generate_followup(lead: dict, lang: str) -> str:
 
 @app.post("/api/action/followup")
 async def action_followup(request: Request):
-    """Generate follow-up message and send it as a WeCom DM from bot."""
+    """Generate follow-up message and send it as a WeCom DM from bot.
+
+    Supports channel-aware formatting:
+    - whatsapp: includes wa.me link
+    - email: includes mailto subject line
+    - social: Reddit/Facebook reply template
+    - b2b: B2B platform contact template
+    - default: generic follow-up
+    """
     body = await request.json()
     lead = body.get("lead", {})
     lang = body.get("lang", "en")
+    channel = body.get("channel", "")
 
     if not lead:
         return JSONResponse({"ok": False, "error": "No lead data"}, status_code=400)
 
-    # Generate the follow-up message
     followup_text = _generate_followup(lead, lang)
 
-    # Build a rich markdown DM
     name = lead.get("buyerName") or lead.get("n") or "未知买家"
     country = lead.get("buyerCountry") or lead.get("c") or "未知"
     score = lead.get("intentScore") or lead.get("s") or 0
     title = lead.get("title") or lead.get("t") or ""
-    lang_label = {"en": "English", "zh": "中文", "whatsapp": "WhatsApp"}.get(lang, lang)
+    source = lead.get("source") or lead.get("sr") or ""
+    source_url = lead.get("sourceUrl") or lead.get("su") or lead.get("url") or ""
+    contact = lead.get("contactInfo") or lead.get("ci") or ""
 
-    dm_content = (
-        f"**💬 跟进话术已生成 [{lang_label}]**\n"
-        f"> 🎯 [{score}分] {country} | {name}\n"
-        f"> 📋 {title[:40]}\n\n"
-        f"---\n\n"
-        f"{followup_text}\n\n"
-        f"---\n"
-        f"*复制以上内容发送给买家*"
-    )
+    # Channel-specific DM header
+    if channel == "whatsapp":
+        # Extract WhatsApp number
+        import re
+        wa_match = re.search(r'\+?(\d[\d\s\-]{7,})', contact)
+        wa_num = wa_match.group(1).replace(" ", "").replace("-", "") if wa_match else ""
+        wa_link = f"https://wa.me/{wa_num}" if wa_num else ""
+        dm_content = (
+            f"**📱 WhatsApp跟进 — 高质量线索**\n"
+            f"> 🎯 [{score}分] {country} | {name}\n"
+            f"> 📋 {title[:40]}\n"
+        )
+        if wa_link:
+            dm_content += f"> 📱 [点击打开WhatsApp]({wa_link})\n"
+        dm_content += f"\n---\n\n{followup_text}\n\n---\n*复制话术 → 打开WhatsApp → 粘贴发送*"
+
+    elif channel == "email":
+        dm_content = (
+            f"**📧 邮件跟进**\n"
+            f"> 🎯 [{score}分] {country} | {name}\n"
+            f"> 📋 {title[:40]}\n"
+        )
+        if contact:
+            dm_content += f"> 📧 {contact[:40]}\n"
+        dm_content += f"\n---\n\n**Subject:** Re: {title[:30]}\n\n{followup_text}\n\n---\n*复制邮件内容发送*"
+
+    elif channel == "social":
+        dm_content = (
+            f"**💬 社媒回复模板 — {source}**\n"
+            f"> 🎯 [{score}分] {country} | {name}\n"
+            f"> 📋 {title[:40]}\n"
+        )
+        if source_url:
+            dm_content += f"> 🔗 [打开原帖]({source_url})\n"
+        dm_content += f"\n---\n\n{followup_text}\n\n---\n*去{source}帖子下方回复/私信买家*"
+
+    elif channel == "b2b":
+        dm_content = (
+            f"**🏢 B2B平台联系 — {source}**\n"
+            f"> 🎯 [{score}分] {country} | {name}\n"
+            f"> 📋 {title[:40]}\n"
+        )
+        if source_url:
+            dm_content += f"> 🔗 [打开平台页面]({source_url})\n"
+        dm_content += f"\n---\n\n{followup_text}\n\n---\n*去{source}平台联系买家*"
+
+    else:
+        lang_label = {"en": "English", "zh": "中文", "whatsapp": "WhatsApp"}.get(lang, lang)
+        dm_content = (
+            f"**💬 跟进话术 [{lang_label}]**\n"
+            f"> 🎯 [{score}分] {country} | {name}\n"
+            f"> 📋 {title[:40]}\n\n"
+            f"---\n\n{followup_text}\n\n---\n*复制以上内容发送给买家*"
+        )
 
     token = await _get_wecom_token()
     if not token:
@@ -1025,7 +1079,7 @@ async def action_followup(request: Request):
 
     ok = await _wecom_dm(token, dm_content, markdown=True)
     if ok:
-        logger.info("Follow-up DM sent: %s [%s]", name, lang)
+        logger.info("Follow-up DM sent: %s [%s/%s]", name, lang, channel)
         return JSONResponse({"ok": True, "message": "话术已发送到微信"})
     else:
         return JSONResponse({"ok": False, "error": "WeCom send failed"}, status_code=500)
