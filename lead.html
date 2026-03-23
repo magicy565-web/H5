@@ -352,8 +352,10 @@ body{font-family:var(--font);background:var(--bg);color:var(--text-primary);line
 
     <!-- Action buttons -->
     <div class="actions">
-      <button class="btn btn-green" onclick="showFollowup()">💬 生成跟进话术</button>
-      <button class="btn btn-blue" onclick="addToTodo()">📌 加入待办</button>
+      <button class="btn btn-green" onclick="sendFollowup('en')">💬 English跟进</button>
+      <button class="btn btn-blue" onclick="sendFollowup('zh')">💬 中文跟进</button>
+      <button class="btn btn-purple" onclick="sendFollowup('whatsapp')">💬 WhatsApp</button>
+      <button class="btn btn-secondary" onclick="sendTodo()">📌 加入待办</button>
       <button class="btn btn-secondary" onclick="copyLead()">📋 复制信息</button>
       ${sourceUrl ? '<a class="btn btn-primary" href="' + escAttr(sourceUrl) + '" target="_blank" rel="noopener" style="text-decoration:none">🔗 查看原帖</a>' : ''}
     </div>
@@ -361,11 +363,16 @@ body{font-family:var(--font);background:var(--bg);color:var(--text-primary);line
     <div class="timestamp">线索ID: ${escHtml(lead.id || lead.contentHash || '-')} · 快照生成于推送时刻</div>
   `;
 
-  // ── Lead key for localStorage ──
-  const leadKey = lead.id || lead.contentHash || btoa(lead.title || '').slice(0, 20);
+  // ── API base URL ──
+  // Auto-detect: same origin when served by FastAPI, or configurable via ?api= query param
+  var params = new URLSearchParams(location.search);
+  var API_BASE = params.get('api') || (location.hostname === 'magicy565-web.github.io' ? '' : location.origin);
 
-  // ── Status tracking (localStorage) ──
-  const STATUS_LIST = [
+  // ── Lead key for localStorage ──
+  var leadKey = lead.id || lead.contentHash || btoa(lead.title || '').slice(0, 20);
+
+  // ── Status tracking (localStorage + API DM) ──
+  var STATUS_LIST = [
     { key: 'pending',   label: '待跟进', dot: 'status-dot-pending',   emoji: '🟡' },
     { key: 'contacted', label: '已联系', dot: 'status-dot-contacted', emoji: '🔵' },
     { key: 'won',       label: '已成交', dot: 'status-dot-won',       emoji: '🟢' },
@@ -374,24 +381,28 @@ body{font-family:var(--font);background:var(--bg);color:var(--text-primary);line
 
   function getLeadStatus() {
     try {
-      const data = JSON.parse(localStorage.getItem('lead_status_' + leadKey) || 'null');
+      var data = JSON.parse(localStorage.getItem('lead_status_' + leadKey) || 'null');
       return data || { status: 'pending', updatedAt: '' };
     } catch(e) { return { status: 'pending', updatedAt: '' }; }
   }
 
   function setLeadStatus(statusKey) {
-    const data = { status: statusKey, updatedAt: new Date().toISOString() };
+    var data = { status: statusKey, updatedAt: new Date().toISOString() };
     localStorage.setItem('lead_status_' + leadKey, JSON.stringify(data));
     renderStatusBar();
-    showToast(STATUS_LIST.find(s => s.key === statusKey).label + ' - 状态已更新');
+    // Send DM via API
+    if (API_BASE) {
+      callAPI('/api/action/status', { lead: lead, status: statusKey });
+    }
+    showToast(STATUS_LIST.find(function(s) { return s.key === statusKey; }).label + ' - 状态已更新');
   }
 
   function renderStatusBar() {
-    const bar = document.getElementById('status-bar');
+    var bar = document.getElementById('status-bar');
     if (!bar) return;
-    const data = getLeadStatus();
-    const st = STATUS_LIST.find(s => s.key === data.status) || STATUS_LIST[0];
-    const timeStr = data.updatedAt ? new Date(data.updatedAt).toLocaleString('zh-CN') : '';
+    var data = getLeadStatus();
+    var st = STATUS_LIST.find(function(s) { return s.key === data.status; }) || STATUS_LIST[0];
+    var timeStr = data.updatedAt ? new Date(data.updatedAt).toLocaleString('zh-CN') : '';
     bar.innerHTML = '<div class="status-card">' +
       '<div class="status-left">' +
         '<div class="status-dot ' + st.dot + '"></div>' +
@@ -405,13 +416,13 @@ body{font-family:var(--font);background:var(--bg);color:var(--text-primary);line
   }
 
   window.showStatusPicker = function() {
-    const current = getLeadStatus().status;
-    const overlay = document.createElement('div');
+    var current = getLeadStatus().status;
+    var overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
     overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
-    let optionsHtml = '';
+    var optionsHtml = '';
     STATUS_LIST.forEach(function(st) {
-      const active = st.key === current ? ' active' : '';
+      var active = st.key === current ? ' active' : '';
       optionsHtml += '<button class="modal-opt' + active + '" onclick="pickStatus(\'' + st.key + '\')">' +
         '<div class="status-dot ' + st.dot + '"></div>' +
         st.emoji + ' ' + st.label +
@@ -431,10 +442,9 @@ body{font-family:var(--font);background:var(--bg);color:var(--text-primary);line
     if (overlay) overlay.remove();
   };
 
-  // Render initial status bar
   renderStatusBar();
 
-  // ── Toast notification ──
+  // ── Toast ──
   function showToast(msg) {
     var existing = document.querySelector('.toast');
     if (existing) existing.remove();
@@ -442,170 +452,67 @@ body{font-family:var(--font);background:var(--bg);color:var(--text-primary);line
     t.className = 'toast';
     t.textContent = msg;
     document.body.appendChild(t);
-    setTimeout(function() { t.remove(); }, 2000);
+    setTimeout(function() { t.remove(); }, 2500);
   }
 
-  // ── Add to Todo ──
-  window.addToTodo = function() {
-    var todos = [];
-    try { todos = JSON.parse(localStorage.getItem('lead_todos') || '[]'); } catch(e) { todos = []; }
-    // Check if already in todo
-    var exists = todos.some(function(t) { return t.key === leadKey; });
-    if (exists) {
-      showToast('该线索已在待办列表中');
-      return;
+  // ── API call helper ──
+  function callAPI(path, body) {
+    if (!API_BASE) {
+      showToast('API未配置，请设置api参数');
+      return Promise.resolve(null);
     }
-    todos.unshift({
-      key: leadKey,
-      title: lead.title || '未知线索',
-      score: lead.intentScore,
-      country: lead.buyerCountry || '未知',
-      buyerName: lead.buyerName || '',
-      source: lead.source || '',
-      addedAt: new Date().toISOString(),
-      url: location.href,
+    return fetch(API_BASE + path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    .then(function(r) { return r.json(); })
+    .catch(function(e) {
+      console.error('API call failed:', e);
+      showToast('请求失败: ' + e.message);
+      return null;
     });
-    localStorage.setItem('lead_todos', JSON.stringify(todos));
-    // Also set status to pending if not already set
-    var currentStatus = getLeadStatus();
-    if (currentStatus.status === 'pending' && !currentStatus.updatedAt) {
-      setLeadStatus('pending');
-    }
-    showToast('已加入待办列表 (' + todos.length + '条)');
-    // Flash the button
-    var btn = document.querySelector('.btn-blue');
-    if (btn) {
-      btn.innerHTML = '✅ 已加入待办';
-      setTimeout(function() { btn.innerHTML = '📌 加入待办'; }, 1500);
-    }
-  };
-
-  // ── Follow-up message templates ──
-  var followupTemplates = {
-    en: generateEnglishTemplate(),
-    zh: generateChineseTemplate(),
-    whatsapp: generateWhatsAppTemplate(),
-  };
-
-  function generateEnglishTemplate() {
-    var name = lead.buyerName || 'Sir/Madam';
-    var country = lead.buyerCountry || '';
-    var specs = lead.machineSpecs || '';
-    var lines = [
-      'Dear ' + name + ',',
-      '',
-      'I noticed your inquiry' + (specs ? ' regarding ' + specs : '') + (lead.source ? ' on ' + lead.source : '') + '.',
-      '',
-    ];
-    if (lead.intentScore >= 4) {
-      lines.push('We are a leading manufacturer with extensive export experience' + (country ? ' to ' + country : '') + '. We can provide:');
-      lines.push('- Competitive factory-direct pricing');
-      lines.push('- Customization per your specifications');
-      lines.push('- Full after-sales support and training');
-    } else {
-      lines.push('We specialize in this area and would be happy to discuss your requirements further.');
-    }
-    lines.push('');
-    lines.push('Would you be available for a quick call this week to discuss your needs in detail?');
-    lines.push('');
-    lines.push('Best regards');
-    return lines.join('\n');
   }
 
-  function generateChineseTemplate() {
-    var name = lead.buyerName || '客户';
-    var specs = lead.machineSpecs || '相关产品';
-    var lines = [
-      '尊敬的 ' + name + '：',
-      '',
-      '您好！我们注意到您' + (lead.source ? '在 ' + lead.source + ' 上' : '') + '关于' + specs + '的采购需求。',
-      '',
-      '我司是专业制造商，具备丰富的出口经验：',
-      '- 工厂直供，价格有竞争力',
-      '- 可根据您的需求定制',
-      '- 提供完善的售后服务和技术支持',
-      '',
-      '请问您方便这周安排一次电话沟通，详细了解您的需求吗？',
-      '',
-      '期待您的回复！',
-    ];
-    return lines.join('\n');
-  }
-
-  function generateWhatsAppTemplate() {
-    var name = lead.buyerName || '';
-    var greeting = name ? 'Hi ' + name + '! ' : 'Hello! ';
-    var specs = lead.machineSpecs || 'your requirements';
-    var lines = [
-      greeting + '👋',
-      '',
-      'I saw your inquiry about ' + specs + (lead.source ? ' on ' + lead.source : '') + '.',
-      '',
-      'We are a direct manufacturer and can offer you:',
-      '✅ Best factory price',
-      '✅ Custom specifications',
-      '✅ Quality guarantee',
-      '',
-      'Can I send you our catalog and price list? 📋',
-    ];
-    return lines.join('\n');
-  }
-
-  var currentTemplateLang = 'en';
-
-  window.showFollowup = function() {
-    var area = document.getElementById('followup-area');
-    if (!area) return;
-    if (area.querySelector('.followup-card')) {
-      area.innerHTML = '';
-      return;
-    }
-    renderFollowup();
-  };
-
-  function renderFollowup() {
-    var area = document.getElementById('followup-area');
-    if (!area) return;
-    var tabs = ['en', 'zh', 'whatsapp'];
-    var tabLabels = { en: 'English', zh: '中文', whatsapp: 'WhatsApp' };
-    var tabsHtml = '';
-    tabs.forEach(function(t) {
-      var active = t === currentTemplateLang ? ' active' : '';
-      tabsHtml += '<button class="followup-tab' + active + '" onclick="switchTemplate(\'' + t + '\')">' + tabLabels[t] + '</button>';
-    });
-    area.innerHTML = '<div class="followup-card">' +
-      '<div class="followup-header">' +
-        '<div class="followup-title">跟进话术模板</div>' +
-        '<button class="followup-close" onclick="document.getElementById(\'followup-area\').innerHTML=\'\'">&times;</button>' +
-      '</div>' +
-      '<div class="followup-tabs">' + tabsHtml + '</div>' +
-      '<div class="followup-text" id="followup-text">' + escHtml(followupTemplates[currentTemplateLang]) + '</div>' +
-      '<div class="followup-actions">' +
-        '<button class="btn btn-green" onclick="copyFollowup()" style="flex:1">📋 复制话术</button>' +
-      '</div>' +
-    '</div>';
-  }
-
-  window.switchTemplate = function(lang) {
-    currentTemplateLang = lang;
-    renderFollowup();
-  };
-
-  window.copyFollowup = function() {
-    var text = followupTemplates[currentTemplateLang];
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(text).then(function() {
-        showToast('话术已复制到剪贴板');
+  // ── Send Follow-up DM (bot sends message to WeCom) ──
+  window.sendFollowup = function(lang) {
+    var langLabel = { en: 'English', zh: '中文', whatsapp: 'WhatsApp' }[lang] || lang;
+    showToast('正在生成' + langLabel + '跟进话术...');
+    callAPI('/api/action/followup', { lead: lead, lang: lang })
+      .then(function(data) {
+        if (data && data.ok) {
+          showToast('✅ ' + langLabel + '话术已发送到微信');
+        } else if (data) {
+          showToast('发送失败: ' + (data.error || '未知错误'));
+        }
       });
-    } else {
-      var ta = document.createElement('textarea');
-      ta.value = text;
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand('copy');
-      document.body.removeChild(ta);
-      showToast('话术已复制到剪贴板');
-    }
+  };
+
+  // ── Send Todo DM (bot sends message to WeCom) ──
+  window.sendTodo = function() {
+    showToast('正在添加待办...');
+    callAPI('/api/action/todo', { lead: lead })
+      .then(function(data) {
+        if (data && data.ok) {
+          showToast('✅ 待办已推送到微信');
+          // Also save locally
+          var todos = [];
+          try { todos = JSON.parse(localStorage.getItem('lead_todos') || '[]'); } catch(e) {}
+          var exists = todos.some(function(t) { return t.key === leadKey; });
+          if (!exists) {
+            todos.unshift({
+              key: leadKey,
+              title: lead.title || '',
+              score: lead.intentScore,
+              country: lead.buyerCountry || '',
+              addedAt: new Date().toISOString(),
+            });
+            localStorage.setItem('lead_todos', JSON.stringify(todos));
+          }
+        } else if (data) {
+          showToast('发送失败: ' + (data.error || '未知错误'));
+        }
+      });
   };
 
   // ── Copy lead info ──
@@ -620,18 +527,12 @@ body{font-family:var(--font);background:var(--bg);color:var(--text-primary);line
       lead.contactInfo ? '联系: ' + lead.contactInfo : '',
       sourceUrl ? '来源: ' + sourceUrl : '',
     ].filter(Boolean).join('\n');
-
     if (navigator.clipboard) {
-      navigator.clipboard.writeText(parts).then(function() {
-        showToast('线索信息已复制');
-      });
+      navigator.clipboard.writeText(parts).then(function() { showToast('线索信息已复制'); });
     } else {
       var ta = document.createElement('textarea');
-      ta.value = parts;
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand('copy');
-      document.body.removeChild(ta);
+      ta.value = parts; document.body.appendChild(ta); ta.select();
+      document.execCommand('copy'); document.body.removeChild(ta);
       showToast('线索信息已复制');
     }
   };
@@ -640,9 +541,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text-primary);line
     if (!s) return '';
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
-  function escAttr(s) {
-    return escHtml(s);
-  }
+  function escAttr(s) { return escHtml(s); }
 })();
 </script>
 </body>

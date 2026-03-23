@@ -9,8 +9,9 @@ import time
 import random
 import asyncio
 import logging
+from datetime import datetime
 from pathlib import Path
-from typing import AsyncGenerator
+from typing import Any, AsyncGenerator
 
 from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse, HTMLResponse, JSONResponse
@@ -18,6 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from openai import AsyncOpenAI
 from dotenv import load_dotenv
+import httpx
 
 load_dotenv()
 
@@ -27,6 +29,11 @@ load_dotenv()
 LLM_API_KEY = os.getenv("DASHSCOPE_API_KEY", "sk-9cd6b877d45c4bb6a29925c2e1dab4b3")
 LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
 LLM_MODEL = os.getenv("LLM_MODEL", "qwen-plus")
+
+# WeCom credentials for action DM
+WECOM_CORP_ID = os.getenv("WECOM_CORP_ID", "")
+WECOM_AGENT_ID = int(os.getenv("WECOM_AGENT_ID", "0"))
+WECOM_SECRET = os.getenv("WECOM_SECRET", "")
 
 # Fallback model chain: tried in order when the current model fails (quota/rate limit)
 # Format: list of (base_url, api_key, model_name) tuples
@@ -860,6 +867,245 @@ async def admin_stats():
             "cta_submit": event_counts.get("cta_submit", 0),
         }
     })
+
+
+# ---------------------------------------------------------------------------
+# WeCom DM — send action messages directly from bot
+# ---------------------------------------------------------------------------
+_wecom_token_cache: dict[str, Any] = {"token": None, "expires_at": 0.0}
+
+async def _get_wecom_token() -> str | None:
+    if not (WECOM_CORP_ID and WECOM_SECRET):
+        return None
+    if _wecom_token_cache["token"] and time.time() < _wecom_token_cache["expires_at"] - 300:
+        return _wecom_token_cache["token"]
+    url = f"https://qyapi.weixin.qq.com/cgi-bin/gettoken?corpid={WECOM_CORP_ID}&corpsecret={WECOM_SECRET}"
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(url)
+            data = resp.json()
+            if data.get("errcode") == 0:
+                _wecom_token_cache["token"] = data["access_token"]
+                _wecom_token_cache["expires_at"] = time.time() + data.get("expires_in", 7200)
+                return data["access_token"]
+            logger.warning("WeCom token error: %s", data)
+    except Exception:
+        logger.exception("Failed to get WeCom token")
+    return None
+
+async def _wecom_dm(token: str, content: str, markdown: bool = True) -> bool:
+    """Send a DM from bot to @all users."""
+    send_url = f"https://qyapi.weixin.qq.com/cgi-bin/message/send?access_token={token}"
+    if markdown:
+        payload = {
+            "touser": "@all",
+            "msgtype": "markdown",
+            "agentid": WECOM_AGENT_ID,
+            "markdown": {"content": content},
+        }
+    else:
+        payload = {
+            "touser": "@all",
+            "msgtype": "text",
+            "agentid": WECOM_AGENT_ID,
+            "text": {"content": content},
+        }
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(send_url, json=payload)
+            data = resp.json()
+            if data.get("errcode") == 0:
+                return True
+            logger.warning("WeCom DM error: %s", data)
+    except Exception:
+        logger.exception("WeCom DM failed")
+    return False
+
+def _generate_followup(lead: dict, lang: str) -> str:
+    """Generate a follow-up message template based on lead data."""
+    name = lead.get("buyerName") or lead.get("n") or ""
+    country = lead.get("buyerCountry") or lead.get("c") or ""
+    specs = lead.get("machineSpecs") or lead.get("sp") or ""
+    source = lead.get("source") or lead.get("sr") or ""
+    title = lead.get("title") or lead.get("t") or ""
+    score = lead.get("intentScore") or lead.get("s") or 0
+    summary = lead.get("summaryZh") or lead.get("z") or ""
+
+    if lang == "zh":
+        buyer_name = name or "客户"
+        spec_text = specs or "相关产品"
+        lines = [
+            f"尊敬的 {buyer_name}：",
+            "",
+            f"您好！我们注意到您{'在 ' + source + ' 上' if source else ''}关于{spec_text}的采购需求。",
+            "",
+            "我司是专业制造商，具备丰富的出口经验：",
+            "- 工厂直供，价格有竞争力",
+            "- 可根据您的需求定制",
+            "- 提供完善的售后服务和技术支持",
+            "",
+            "请问您方便这周安排一次电话沟通，详细了解您的需求吗？",
+            "",
+            "期待您的回复！",
+        ]
+        return "\n".join(lines)
+
+    elif lang == "whatsapp":
+        greeting = f"Hi {name}! " if name else "Hello! "
+        spec_text = specs or "your requirements"
+        lines = [
+            f"{greeting}👋",
+            "",
+            f"I saw your inquiry about {spec_text}{' on ' + source if source else ''}.",
+            "",
+            "We are a direct manufacturer and can offer you:",
+            "✅ Best factory price",
+            "✅ Custom specifications",
+            "✅ Quality guarantee",
+            "",
+            "Can I send you our catalog and price list? 📋",
+        ]
+        return "\n".join(lines)
+
+    else:  # en
+        buyer_name = name or "Sir/Madam"
+        lines = [
+            f"Dear {buyer_name},",
+            "",
+            f"I noticed your inquiry{' regarding ' + specs if specs else ''}{' on ' + source if source else ''}.",
+            "",
+        ]
+        if score >= 4:
+            lines.append(f"We are a leading manufacturer with extensive export experience{' to ' + country if country else ''}. We can provide:")
+            lines.append("- Competitive factory-direct pricing")
+            lines.append("- Customization per your specifications")
+            lines.append("- Full after-sales support and training")
+        else:
+            lines.append("We specialize in this area and would be happy to discuss your requirements further.")
+        lines.append("")
+        lines.append("Would you be available for a quick call this week to discuss your needs in detail?")
+        lines.append("")
+        lines.append("Best regards")
+        return "\n".join(lines)
+
+
+@app.post("/api/action/followup")
+async def action_followup(request: Request):
+    """Generate follow-up message and send it as a WeCom DM from bot."""
+    body = await request.json()
+    lead = body.get("lead", {})
+    lang = body.get("lang", "en")
+
+    if not lead:
+        return JSONResponse({"ok": False, "error": "No lead data"}, status_code=400)
+
+    # Generate the follow-up message
+    followup_text = _generate_followup(lead, lang)
+
+    # Build a rich markdown DM
+    name = lead.get("buyerName") or lead.get("n") or "未知买家"
+    country = lead.get("buyerCountry") or lead.get("c") or "未知"
+    score = lead.get("intentScore") or lead.get("s") or 0
+    title = lead.get("title") or lead.get("t") or ""
+    lang_label = {"en": "English", "zh": "中文", "whatsapp": "WhatsApp"}.get(lang, lang)
+
+    dm_content = (
+        f"**💬 跟进话术已生成 [{lang_label}]**\n"
+        f"> 🎯 [{score}分] {country} | {name}\n"
+        f"> 📋 {title[:40]}\n\n"
+        f"---\n\n"
+        f"{followup_text}\n\n"
+        f"---\n"
+        f"*复制以上内容发送给买家*"
+    )
+
+    token = await _get_wecom_token()
+    if not token:
+        return JSONResponse({"ok": False, "error": "WeCom token failed"}, status_code=500)
+
+    ok = await _wecom_dm(token, dm_content, markdown=True)
+    if ok:
+        logger.info("Follow-up DM sent: %s [%s]", name, lang)
+        return JSONResponse({"ok": True, "message": "话术已发送到微信"})
+    else:
+        return JSONResponse({"ok": False, "error": "WeCom send failed"}, status_code=500)
+
+
+@app.post("/api/action/status")
+async def action_status(request: Request):
+    """Update lead status and send confirmation DM."""
+    body = await request.json()
+    lead = body.get("lead", {})
+    status = body.get("status", "pending")
+
+    status_labels = {
+        "pending": "🟡 待跟进",
+        "contacted": "🔵 已联系",
+        "won": "🟢 已成交",
+        "lost": "⚫ 已放弃",
+    }
+    status_label = status_labels.get(status, status)
+
+    name = lead.get("buyerName") or lead.get("n") or "未知买家"
+    country = lead.get("buyerCountry") or lead.get("c") or "未知"
+    score = lead.get("intentScore") or lead.get("s") or 0
+    title = lead.get("title") or lead.get("t") or ""
+
+    dm_content = (
+        f"**📌 线索状态更新**\n"
+        f"> [{score}分] {country} | {name}\n"
+        f"> {title[:40]}\n\n"
+        f"状态变更为：**{status_label}**\n"
+        f"时间：{datetime.now().strftime('%Y-%m-%d %H:%M')}"
+    )
+
+    token = await _get_wecom_token()
+    if not token:
+        return JSONResponse({"ok": False, "error": "WeCom token failed"}, status_code=500)
+
+    ok = await _wecom_dm(token, dm_content, markdown=True)
+    if ok:
+        logger.info("Status DM sent: %s -> %s", name, status)
+        return JSONResponse({"ok": True, "message": f"状态已更新为 {status_label}"})
+    else:
+        return JSONResponse({"ok": False, "error": "WeCom send failed"}, status_code=500)
+
+
+@app.post("/api/action/todo")
+async def action_todo(request: Request):
+    """Add lead to todo and send confirmation DM."""
+    body = await request.json()
+    lead = body.get("lead", {})
+
+    name = lead.get("buyerName") or lead.get("n") or "未知买家"
+    country = lead.get("buyerCountry") or lead.get("c") or "未知"
+    score = lead.get("intentScore") or lead.get("s") or 0
+    title = lead.get("title") or lead.get("t") or ""
+    action = lead.get("recommendedAction") or lead.get("a") or "持续跟踪"
+    specs = lead.get("machineSpecs") or lead.get("sp") or ""
+
+    dm_content = (
+        f"**📌 新待办线索**\n"
+        f"> 🎯 [{score}分] {country} | {name}\n"
+        f"> 📋 {title[:40]}\n"
+    )
+    if specs:
+        dm_content += f"> 🔧 {specs[:30]}\n"
+    dm_content += (
+        f"\n**建议操作：** {action}\n"
+        f"**添加时间：** {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+    )
+
+    token = await _get_wecom_token()
+    if not token:
+        return JSONResponse({"ok": False, "error": "WeCom token failed"}, status_code=500)
+
+    ok = await _wecom_dm(token, dm_content, markdown=True)
+    if ok:
+        logger.info("Todo DM sent: %s", name)
+        return JSONResponse({"ok": True, "message": "已加入待办并推送到微信"})
+    else:
+        return JSONResponse({"ok": False, "error": "WeCom send failed"}, status_code=500)
 
 
 # ---------------------------------------------------------------------------
