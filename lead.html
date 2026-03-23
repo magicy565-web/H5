@@ -123,12 +123,20 @@ body{font-family:var(--font);background:var(--bg);color:var(--text-primary);line
 
 <script>
 (function() {
+  // UTF-8 aware base64 decode (atob only handles Latin1, garbles Chinese)
+  function b64DecodeUtf8(b64) {
+    const binStr = atob(b64);
+    const bytes = new Uint8Array(binStr.length);
+    for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+    return new TextDecoder('utf-8').decode(bytes);
+  }
+
   // Parse lead data from URL hash
   function getLeadData() {
     try {
       const hash = location.hash.slice(1);
       if (!hash) return null;
-      const json = decodeURIComponent(atob(hash));
+      const json = b64DecodeUtf8(hash);
       const raw = JSON.parse(json);
       // Support short keys (from compressed URLs) and long keys (legacy)
       return {
