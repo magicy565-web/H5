@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>采购线索详情</title>
+<style>
+:root {
+  --orange: #ff6b35;
+  --orange-light: #ff8a5c;
+  --orange-dark: #e85a28;
+  --green: #00b578;
+  --blue: #3b82f6;
+  --purple: #8b5cf6;
+  --red: #ff4d4f;
+  --amber: #ff8c00;
+  --text-primary: #1a1a2e;
+  --text-secondary: #555;
+  --text-muted: #999;
+  --bg: #f7f8fa;
+  --bg-white: #ffffff;
+  --border: #eee;
+  --font: -apple-system,"PingFang SC","Microsoft YaHei","Hiragino Sans GB",sans-serif;
+  --radius: 12px;
+  --radius-sm: 8px;
+}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent}
+body{font-family:var(--font);background:var(--bg);color:var(--text-primary);line-height:1.6;-webkit-font-smoothing:antialiased;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
+.wrap{max-width:480px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column}
+
+/* Header */
+.header{background:linear-gradient(135deg,#1a1a2e 0%,#16213e 100%);padding:20px 16px 24px;color:#fff}
+.header-back{display:inline-flex;align-items:center;gap:6px;color:rgba(255,255,255,.7);font-size:13px;text-decoration:none;margin-bottom:16px}
+.header-back:hover{color:#fff}
+.header-back svg{width:16px;height:16px}
+.header-tier{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600;margin-bottom:12px}
+.tier-urgent{background:rgba(255,77,79,.2);color:#ff4d4f;border:1px solid rgba(255,77,79,.3)}
+.tier-important{background:rgba(255,140,0,.2);color:#ff8c00;border:1px solid rgba(255,140,0,.3)}
+.tier-tracking{background:rgba(59,130,246,.2);color:#3b82f6;border:1px solid rgba(59,130,246,.3)}
+.header-title{font-size:18px;font-weight:700;line-height:1.4;margin-bottom:8px}
+.header-meta{display:flex;flex-wrap:wrap;gap:8px;font-size:12px;color:rgba(255,255,255,.6)}
+.header-meta span{display:inline-flex;align-items:center;gap:4px}
+
+/* Score badge */
+.score-badge{display:inline-flex;align-items:center;justify-content:center;width:48px;height:48px;border-radius:50%;font-size:20px;font-weight:800;color:#fff;position:absolute;right:16px;top:60px}
+.score-5{background:linear-gradient(135deg,#ff4d4f,#ff1a1a);box-shadow:0 4px 16px rgba(255,77,79,.4)}
+.score-4{background:linear-gradient(135deg,#ff8c00,#ff6600);box-shadow:0 4px 16px rgba(255,140,0,.4)}
+.score-3{background:linear-gradient(135deg,#3b82f6,#2563eb);box-shadow:0 4px 16px rgba(59,130,246,.4)}
+.score-low{background:linear-gradient(135deg,#999,#777);box-shadow:0 4px 16px rgba(0,0,0,.2)}
+.header{position:relative}
+
+/* Content */
+.content{flex:1;padding:16px;display:flex;flex-direction:column;gap:12px}
+
+/* Card */
+.card{background:var(--bg-white);border-radius:var(--radius);padding:16px;box-shadow:0 1px 6px rgba(0,0,0,.04),0 4px 16px rgba(0,0,0,.03)}
+.card-label{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.card-label svg{width:14px;height:14px;opacity:.5}
+.card-value{font-size:14px;line-height:1.7;color:var(--text-primary)}
+
+/* Summary card */
+.summary-card{background:linear-gradient(135deg,#f0f7ff,#fff);border-left:4px solid var(--blue)}
+.summary-card .card-value{font-size:15px;color:var(--text-primary);font-weight:500}
+
+/* Info grid */
+.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.info-item{background:var(--bg-white);border-radius:var(--radius-sm);padding:12px}
+.info-item-label{font-size:11px;color:var(--text-muted);margin-bottom:4px}
+.info-item-value{font-size:14px;font-weight:600;color:var(--text-primary)}
+
+/* Tags */
+.tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.tag{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:500}
+.tag-action{background:rgba(255,107,53,.1);color:var(--orange);border:1px solid rgba(255,107,53,.2)}
+.tag-urgency{background:rgba(59,130,246,.1);color:var(--blue);border:1px solid rgba(59,130,246,.2)}
+.tag-type{background:rgba(139,92,246,.1);color:var(--purple);border:1px solid rgba(139,92,246,.2)}
+.tag-source{background:rgba(0,181,120,.1);color:var(--green);border:1px solid rgba(0,181,120,.2)}
+
+/* Raw text */
+.raw-text{font-size:13px;line-height:1.8;color:var(--text-secondary);white-space:pre-wrap;word-break:break-word;max-height:300px;overflow-y:auto;padding:12px;background:var(--bg);border-radius:var(--radius-sm)}
+
+/* Source link */
+.source-link{display:flex;align-items:center;gap:8px;padding:12px 16px;background:var(--bg-white);border-radius:var(--radius);box-shadow:0 1px 6px rgba(0,0,0,.04);text-decoration:none;color:var(--text-primary);font-size:13px;transition:all .2s}
+.source-link:hover{box-shadow:0 2px 12px rgba(0,0,0,.08);transform:translateY(-1px)}
+.source-link svg{width:16px;height:16px;color:var(--text-muted);flex-shrink:0}
+.source-link .url{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--blue)}
+.source-link .arrow{color:var(--text-muted)}
+
+/* Action buttons */
+.actions{display:flex;gap:10px;padding:16px;margin-top:auto}
+.btn{flex:1;padding:14px;border:none;border-radius:var(--radius);font-size:14px;font-weight:600;font-family:var(--font);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .2s}
+.btn:active{transform:scale(.97)}
+.btn-primary{background:var(--orange);color:#fff;box-shadow:0 4px 16px rgba(255,107,53,.3)}
+.btn-primary:hover{background:var(--orange-dark)}
+.btn-secondary{background:var(--bg-white);color:var(--text-primary);border:1px solid var(--border)}
+.btn-secondary:hover{background:var(--bg)}
+
+/* Timestamp */
+.timestamp{text-align:center;font-size:11px;color:var(--text-muted);padding:8px 0 24px}
+
+/* Empty state */
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;color:var(--text-muted);gap:12px}
+.empty svg{width:64px;height:64px;opacity:.3}
+.empty p{font-size:15px}
+
+/* Animations */
+@keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.card,.info-grid,.source-link,.actions{animation:fadeIn .4s ease both}
+.card:nth-child(2){animation-delay:.05s}
+.card:nth-child(3){animation-delay:.1s}
+.card:nth-child(4){animation-delay:.15s}
+</style>
+</head>
+<body>
+<div class="wrap" id="app">
+  <div class="empty" id="empty-state">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+    <p>没有线索数据</p>
+  </div>
+</div>
+
+<script>
+(function() {
+  // Parse lead data from URL hash
+  function getLeadData() {
+    try {
+      const hash = location.hash.slice(1);
+      if (!hash) return null;
+      const json = decodeURIComponent(atob(hash));
+      return JSON.parse(json);
+    } catch(e) {
+      console.error('Failed to parse lead data:', e);
+      return null;
+    }
+  }
+
+  const lead = getLeadData();
+  if (!lead) return;
+
+  document.getElementById('empty-state').style.display = 'none';
+  document.title = `[${lead.intentScore}分] ${lead.buyerCountry || '未知'} | ${(lead.title || '').slice(0,30)}`;
+
+  // Tier classification
+  function classifyTier(l) {
+    const s = l.intentScore || 0;
+    const u = l.urgency || 'none';
+    const a = l.recommendedAction || '';
+    if (s >= 5 || (s >= 4 && u === 'immediate') || a.includes('立即联系')) return 'urgent';
+    if (s >= 4 || u === 'immediate' || u === 'short_term') return 'important';
+    return 'tracking';
+  }
+
+  const tier = classifyTier(lead);
+  const tierNames = {urgent:'紧急跟进', important:'重点关注', tracking:'持续跟踪'};
+  const tierEmojis = {urgent:'🔴', important:'🟠', tracking:'🔵'};
+  const tierClasses = {urgent:'tier-urgent', important:'tier-important', tracking:'tier-tracking'};
+
+  const urgencyMap = {immediate:'紧急',short_term:'近期',long_term:'远期',none:'未知'};
+  const urgencyZh = urgencyMap[lead.urgency] || lead.urgency || '未知';
+
+  const scoreClass = lead.intentScore >= 5 ? 'score-5' : lead.intentScore >= 4 ? 'score-4' : lead.intentScore >= 3 ? 'score-3' : 'score-low';
+
+  const sourceUrl = lead.sourceUrl || lead.url || '';
+  const discoveredAt = lead.discoveredAt || '';
+  const dateStr = discoveredAt ? new Date(discoveredAt).toLocaleString('zh-CN') : new Date().toLocaleString('zh-CN');
+
+  const app = document.getElementById('app');
+  app.innerHTML = `
+    <!-- Header -->
+    <div class="header">
+      <a class="header-back" href="index.html">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 19l-7-7 7-7"/></svg>
+        返回
+      </a>
+      <div class="header-tier ${tierClasses[tier]}">
+        ${tierEmojis[tier]} ${tierNames[tier]}
+      </div>
+      <div class="header-title">${escHtml(lead.title || '未知线索')}</div>
+      <div class="header-meta">
+        <span>🌍 ${escHtml(lead.buyerCountry || '未知')}</span>
+        ${lead.buyerName ? `<span>👤 ${escHtml(lead.buyerName)}</span>` : ''}
+        <span>📡 ${escHtml(lead.source || '未知')}</span>
+        <span>📅 ${escHtml(dateStr)}</span>
+      </div>
+      <div class="score-badge ${scoreClass}">${lead.intentScore || '?'}</div>
+    </div>
+
+    <!-- Content -->
+    <div class="content">
+
+      <!-- Summary -->
+      ${lead.summaryZh ? `
+      <div class="card summary-card">
+        <div class="card-label">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+          AI 分析摘要
+        </div>
+        <div class="card-value">${escHtml(lead.summaryZh)}</div>
+      </div>` : ''}
+
+      <!-- Info Grid -->
+      <div class="info-grid">
+        <div class="info-item">
+          <div class="info-item-label">意向评分</div>
+          <div class="info-item-value">${lead.intentScore || '?'} / 5</div>
+        </div>
+        <div class="info-item">
+          <div class="info-item-label">紧迫度</div>
+          <div class="info-item-value">${escHtml(urgencyZh)}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-item-label">买家类型</div>
+          <div class="info-item-value">${escHtml(lead.buyerType || '未知')}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-item-label">建议操作</div>
+          <div class="info-item-value">${escHtml(lead.recommendedAction || '持续跟踪')}</div>
+        </div>
+      </div>
+
+      <!-- Specs -->
+      ${lead.machineSpecs ? `
+      <div class="card">
+        <div class="card-label">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><circle cx="12" cy="12" r="3"/></svg>
+          需求规格
+        </div>
+        <div class="card-value">${escHtml(lead.machineSpecs)}</div>
+      </div>` : ''}
+
+      <!-- Contact -->
+      ${lead.contactInfo ? `
+      <div class="card">
+        <div class="card-label">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+          联系方式
+        </div>
+        <div class="card-value">${escHtml(lead.contactInfo)}</div>
+      </div>` : ''}
+
+      <!-- Tags -->
+      <div class="card">
+        <div class="card-label">标签</div>
+        <div class="tags">
+          <span class="tag tag-action">🎯 ${escHtml(lead.recommendedAction || '持续跟踪')}</span>
+          <span class="tag tag-urgency">⏰ ${escHtml(urgencyZh)}</span>
+          ${lead.buyerType ? `<span class="tag tag-type">🏢 ${escHtml(lead.buyerType)}</span>` : ''}
+          ${lead.source ? `<span class="tag tag-source">📡 ${escHtml(lead.source)}</span>` : ''}
+        </div>
+      </div>
+
+      <!-- Raw Text -->
+      ${lead.rawText ? `
+      <div class="card">
+        <div class="card-label">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+          原文内容
+        </div>
+        <div class="raw-text">${escHtml(lead.rawText)}</div>
+      </div>` : ''}
+
+      <!-- Source link -->
+      ${sourceUrl ? `
+      <a class="source-link" href="${escAttr(sourceUrl)}" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+        <span class="url">${escHtml(sourceUrl)}</span>
+        <span class="arrow">→</span>
+      </a>` : ''}
+    </div>
+
+    <!-- Action buttons -->
+    <div class="actions">
+      <button class="btn btn-secondary" onclick="copyLead()">📋 复制信息</button>
+      ${sourceUrl ? `<a class="btn btn-primary" href="${escAttr(sourceUrl)}" target="_blank" rel="noopener" style="text-decoration:none">🔗 查看原帖</a>` : ''}
+    </div>
+
+    <div class="timestamp">线索ID: ${escHtml(lead.id || lead.contentHash || '-')} · 快照生成于推送时刻</div>
+  `;
+
+  // Copy function
+  window.copyLead = function() {
+    const parts = [
+      `[${lead.intentScore}分] ${lead.buyerCountry || '未知'}`,
+      lead.buyerName ? `买家: ${lead.buyerName}` : '',
+      `标题: ${lead.title || ''}`,
+      lead.summaryZh ? `摘要: ${lead.summaryZh}` : '',
+      lead.machineSpecs ? `规格: ${lead.machineSpecs}` : '',
+      `紧迫: ${urgencyZh} | 建议: ${lead.recommendedAction || ''}`,
+      lead.contactInfo ? `联系: ${lead.contactInfo}` : '',
+      sourceUrl ? `来源: ${sourceUrl}` : '',
+    ].filter(Boolean).join('\n');
+
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(parts).then(() => {
+        const btn = document.querySelector('.btn-secondary');
+        btn.textContent = '✅ 已复制';
+        setTimeout(() => btn.innerHTML = '📋 复制信息', 1500);
+      });
+    } else {
+      const ta = document.createElement('textarea');
+      ta.value = parts;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      const btn = document.querySelector('.btn-secondary');
+      btn.textContent = '✅ 已复制';
+      setTimeout(() => btn.innerHTML = '📋 复制信息', 1500);
+    }
+  };
+
+  function escHtml(s) {
+    if (!s) return '';
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function escAttr(s) {
+    return escHtml(s);
+  }
+})();
+</script>
+</body>
+</html>

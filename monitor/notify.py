@@ -12,9 +12,11 @@ Server酱:        设置 SERVERCHAN_KEY
 """
 from __future__ import annotations
 
+import base64
 import json
 import logging
 import time
+import urllib.parse
 from datetime import datetime
 from typing import Any
 
@@ -32,6 +34,37 @@ _wecom_token_cache: dict[str, Any] = {"token": None, "expires_at": 0.0}
 
 # ── H5 pages URL (for card links) ───────────────────────────────────
 H5_BASE_URL = "https://magicy565-web.github.io/H5/"
+H5_LEAD_URL = "https://magicy565-web.github.io/H5/lead.html"
+
+
+def _build_lead_snapshot_url(lead: dict) -> str:
+    """Build a snapshot URL for a lead detail page.
+
+    Encodes lead data as base64 JSON in the URL hash fragment.
+    The lead.html page reads this and renders a rich detail card.
+    """
+    # Pick only the fields needed for the detail page
+    snapshot = {
+        "id": lead.get("id", ""),
+        "title": lead.get("title", ""),
+        "intentScore": lead.get("intentScore", 0),
+        "buyerCountry": lead.get("buyerCountry", ""),
+        "buyerName": lead.get("buyerName", ""),
+        "buyerType": lead.get("buyerType", ""),
+        "summaryZh": lead.get("summaryZh", ""),
+        "machineSpecs": lead.get("machineSpecs", ""),
+        "urgency": lead.get("urgency", ""),
+        "recommendedAction": lead.get("recommendedAction", ""),
+        "contactInfo": lead.get("contactInfo", ""),
+        "source": lead.get("source", ""),
+        "sourceUrl": lead.get("sourceUrl", "") or lead.get("url", ""),
+        "discoveredAt": lead.get("discoveredAt", ""),
+        "contentHash": lead.get("contentHash", ""),
+        "rawText": (lead.get("rawText", "") or "")[:800],  # Truncate to keep URL size manageable
+    }
+    json_str = json.dumps(snapshot, ensure_ascii=False, separators=(",", ":"))
+    b64 = base64.b64encode(json_str.encode("utf-8")).decode("ascii")
+    return f"{H5_LEAD_URL}#{b64}"
 
 # ── Urgency / tier classification ────────────────────────────────────
 _URGENCY_TIERS = {
@@ -423,8 +456,8 @@ def _build_lead_card(lead: dict, idx: int, total: int, industry: str) -> dict:
     # Limit to 6 items (WeCom API limit)
     horizontal = horizontal[:6]
 
-    # Action URL — link to source or H5
-    action_url = source_url if source_url.startswith("http") else H5_BASE_URL
+    # Action URL — link to snapshot detail page (not the raw source)
+    snapshot_url = _build_lead_snapshot_url(lead)
 
     return {
         "touser": "@all",
@@ -444,7 +477,7 @@ def _build_lead_card(lead: dict, idx: int, total: int, industry: str) -> dict:
             "horizontal_content_list": horizontal,
             "card_action": {
                 "type": 1,
-                "url": action_url,
+                "url": snapshot_url,
             },
         },
     }
@@ -527,10 +560,11 @@ def _build_news_cards(leads: list[dict], tier_name: str) -> list[dict]:
             desc_parts.append(f"🎯 {action}")
         description = "\n".join(desc_parts)
 
+        snapshot_url = _build_lead_snapshot_url(lead)
         articles.append({
             "title": article_title,
             "description": description,
-            "url": source_url if source_url.startswith("http") else H5_BASE_URL,
+            "url": snapshot_url,
             "picurl": "",
         })
 
