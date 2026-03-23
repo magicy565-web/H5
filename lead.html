@@ -89,13 +89,60 @@ body{font-family:var(--font);background:var(--bg);color:var(--text-primary);line
 .source-link .arrow{color:var(--text-muted)}
 
 /* Action buttons */
-.actions{display:flex;gap:10px;padding:16px;margin-top:auto}
-.btn{flex:1;padding:14px;border:none;border-radius:var(--radius);font-size:14px;font-weight:600;font-family:var(--font);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .2s}
+.actions{display:flex;flex-wrap:wrap;gap:10px;padding:16px;margin-top:auto}
+.btn{flex:1 1 calc(50% - 5px);min-width:0;padding:14px;border:none;border-radius:var(--radius);font-size:14px;font-weight:600;font-family:var(--font);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .2s}
 .btn:active{transform:scale(.97)}
 .btn-primary{background:var(--orange);color:#fff;box-shadow:0 4px 16px rgba(255,107,53,.3)}
 .btn-primary:hover{background:var(--orange-dark)}
 .btn-secondary{background:var(--bg-white);color:var(--text-primary);border:1px solid var(--border)}
 .btn-secondary:hover{background:var(--bg)}
+.btn-green{background:var(--green);color:#fff;box-shadow:0 4px 16px rgba(0,181,120,.3)}
+.btn-green:hover{background:#009a66}
+.btn-blue{background:var(--blue);color:#fff;box-shadow:0 4px 16px rgba(59,130,246,.3)}
+.btn-blue:hover{background:#2563eb}
+.btn-purple{background:var(--purple);color:#fff;box-shadow:0 4px 16px rgba(139,92,246,.3)}
+.btn-purple:hover{background:#7c3aed}
+.btn-full{flex:1 1 100%}
+
+/* Status bar */
+.status-bar{padding:0 16px}
+.status-card{background:var(--bg-white);border-radius:var(--radius);padding:14px 16px;box-shadow:0 1px 6px rgba(0,0,0,.04);display:flex;align-items:center;justify-content:space-between}
+.status-left{display:flex;align-items:center;gap:8px}
+.status-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.status-dot-pending{background:var(--amber)}
+.status-dot-contacted{background:var(--blue)}
+.status-dot-won{background:var(--green)}
+.status-dot-lost{background:var(--text-muted)}
+.status-text{font-size:14px;font-weight:600}
+.status-time{font-size:11px;color:var(--text-muted)}
+.status-change{font-size:12px;color:var(--blue);background:none;border:1px solid var(--blue);border-radius:20px;padding:4px 12px;font-family:var(--font);cursor:pointer}
+.status-change:active{background:rgba(59,130,246,.1)}
+
+/* Status picker modal */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;display:flex;align-items:flex-end;justify-content:center;animation:fadeIn .2s ease}
+.modal-sheet{background:#fff;border-radius:16px 16px 0 0;width:100%;max-width:480px;padding:20px 16px calc(20px + env(safe-area-inset-bottom));animation:slideUp .3s ease}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.modal-title{font-size:16px;font-weight:700;text-align:center;margin-bottom:16px}
+.modal-options{display:flex;flex-direction:column;gap:8px}
+.modal-opt{display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--bg-white);font-size:14px;font-weight:500;font-family:var(--font);cursor:pointer;transition:all .2s}
+.modal-opt:active{transform:scale(.98)}
+.modal-opt.active{border-color:var(--blue);background:rgba(59,130,246,.05)}
+.modal-cancel{margin-top:8px;padding:14px;border:none;border-radius:var(--radius);background:var(--bg);color:var(--text-secondary);font-size:14px;font-weight:600;font-family:var(--font);cursor:pointer;width:100%;text-align:center}
+
+/* Follow-up template card */
+.followup-card{background:var(--bg-white);border-radius:var(--radius);margin:0 16px;padding:16px;box-shadow:0 1px 6px rgba(0,0,0,.04);animation:fadeIn .3s ease}
+.followup-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.followup-title{font-size:13px;font-weight:600;color:var(--text-primary)}
+.followup-close{background:none;border:none;font-size:18px;color:var(--text-muted);cursor:pointer;padding:0 4px}
+.followup-tabs{display:flex;gap:6px;margin-bottom:12px}
+.followup-tab{padding:4px 12px;border-radius:20px;font-size:12px;border:1px solid var(--border);background:var(--bg-white);color:var(--text-secondary);cursor:pointer;font-family:var(--font)}
+.followup-tab.active{background:var(--blue);color:#fff;border-color:var(--blue)}
+.followup-text{font-size:13px;line-height:1.8;color:var(--text-secondary);white-space:pre-wrap;word-break:break-word;padding:12px;background:var(--bg);border-radius:var(--radius-sm);max-height:200px;overflow-y:auto}
+.followup-actions{display:flex;gap:8px;margin-top:12px}
+.followup-actions .btn{padding:10px;font-size:13px}
+
+/* Toast */
+.toast{position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:10px 20px;border-radius:20px;font-size:13px;z-index:200;animation:fadeIn .3s ease;pointer-events:none}
 
 /* Timestamp */
 .timestamp{text-align:center;font-size:11px;color:var(--text-muted);padding:8px 0 24px}
@@ -297,44 +344,295 @@ body{font-family:var(--font);background:var(--bg);color:var(--text-primary);line
       </a>` : ''}
     </div>
 
+    <!-- Status bar -->
+    <div class="status-bar" id="status-bar"></div>
+
+    <!-- Follow-up template area -->
+    <div id="followup-area"></div>
+
     <!-- Action buttons -->
     <div class="actions">
+      <button class="btn btn-green" onclick="showFollowup()">💬 生成跟进话术</button>
+      <button class="btn btn-blue" onclick="addToTodo()">📌 加入待办</button>
       <button class="btn btn-secondary" onclick="copyLead()">📋 复制信息</button>
-      ${sourceUrl ? `<a class="btn btn-primary" href="${escAttr(sourceUrl)}" target="_blank" rel="noopener" style="text-decoration:none">🔗 查看原帖</a>` : ''}
+      ${sourceUrl ? '<a class="btn btn-primary" href="' + escAttr(sourceUrl) + '" target="_blank" rel="noopener" style="text-decoration:none">🔗 查看原帖</a>' : ''}
     </div>
 
     <div class="timestamp">线索ID: ${escHtml(lead.id || lead.contentHash || '-')} · 快照生成于推送时刻</div>
   `;
 
-  // Copy function
+  // ── Lead key for localStorage ──
+  const leadKey = lead.id || lead.contentHash || btoa(lead.title || '').slice(0, 20);
+
+  // ── Status tracking (localStorage) ──
+  const STATUS_LIST = [
+    { key: 'pending',   label: '待跟进', dot: 'status-dot-pending',   emoji: '🟡' },
+    { key: 'contacted', label: '已联系', dot: 'status-dot-contacted', emoji: '🔵' },
+    { key: 'won',       label: '已成交', dot: 'status-dot-won',       emoji: '🟢' },
+    { key: 'lost',      label: '已放弃', dot: 'status-dot-lost',      emoji: '⚫' },
+  ];
+
+  function getLeadStatus() {
+    try {
+      const data = JSON.parse(localStorage.getItem('lead_status_' + leadKey) || 'null');
+      return data || { status: 'pending', updatedAt: '' };
+    } catch(e) { return { status: 'pending', updatedAt: '' }; }
+  }
+
+  function setLeadStatus(statusKey) {
+    const data = { status: statusKey, updatedAt: new Date().toISOString() };
+    localStorage.setItem('lead_status_' + leadKey, JSON.stringify(data));
+    renderStatusBar();
+    showToast(STATUS_LIST.find(s => s.key === statusKey).label + ' - 状态已更新');
+  }
+
+  function renderStatusBar() {
+    const bar = document.getElementById('status-bar');
+    if (!bar) return;
+    const data = getLeadStatus();
+    const st = STATUS_LIST.find(s => s.key === data.status) || STATUS_LIST[0];
+    const timeStr = data.updatedAt ? new Date(data.updatedAt).toLocaleString('zh-CN') : '';
+    bar.innerHTML = '<div class="status-card">' +
+      '<div class="status-left">' +
+        '<div class="status-dot ' + st.dot + '"></div>' +
+        '<div>' +
+          '<div class="status-text">' + st.emoji + ' ' + st.label + '</div>' +
+          (timeStr ? '<div class="status-time">更新于 ' + timeStr + '</div>' : '') +
+        '</div>' +
+      '</div>' +
+      '<button class="status-change" onclick="showStatusPicker()">切换状态</button>' +
+    '</div>';
+  }
+
+  window.showStatusPicker = function() {
+    const current = getLeadStatus().status;
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
+    let optionsHtml = '';
+    STATUS_LIST.forEach(function(st) {
+      const active = st.key === current ? ' active' : '';
+      optionsHtml += '<button class="modal-opt' + active + '" onclick="pickStatus(\'' + st.key + '\')">' +
+        '<div class="status-dot ' + st.dot + '"></div>' +
+        st.emoji + ' ' + st.label +
+      '</button>';
+    });
+    overlay.innerHTML = '<div class="modal-sheet">' +
+      '<div class="modal-title">更新线索状态</div>' +
+      '<div class="modal-options">' + optionsHtml + '</div>' +
+      '<button class="modal-cancel" onclick="this.closest(\'.modal-overlay\').remove()">取消</button>' +
+    '</div>';
+    document.body.appendChild(overlay);
+  };
+
+  window.pickStatus = function(key) {
+    setLeadStatus(key);
+    var overlay = document.querySelector('.modal-overlay');
+    if (overlay) overlay.remove();
+  };
+
+  // Render initial status bar
+  renderStatusBar();
+
+  // ── Toast notification ──
+  function showToast(msg) {
+    var existing = document.querySelector('.toast');
+    if (existing) existing.remove();
+    var t = document.createElement('div');
+    t.className = 'toast';
+    t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(function() { t.remove(); }, 2000);
+  }
+
+  // ── Add to Todo ──
+  window.addToTodo = function() {
+    var todos = [];
+    try { todos = JSON.parse(localStorage.getItem('lead_todos') || '[]'); } catch(e) { todos = []; }
+    // Check if already in todo
+    var exists = todos.some(function(t) { return t.key === leadKey; });
+    if (exists) {
+      showToast('该线索已在待办列表中');
+      return;
+    }
+    todos.unshift({
+      key: leadKey,
+      title: lead.title || '未知线索',
+      score: lead.intentScore,
+      country: lead.buyerCountry || '未知',
+      buyerName: lead.buyerName || '',
+      source: lead.source || '',
+      addedAt: new Date().toISOString(),
+      url: location.href,
+    });
+    localStorage.setItem('lead_todos', JSON.stringify(todos));
+    // Also set status to pending if not already set
+    var currentStatus = getLeadStatus();
+    if (currentStatus.status === 'pending' && !currentStatus.updatedAt) {
+      setLeadStatus('pending');
+    }
+    showToast('已加入待办列表 (' + todos.length + '条)');
+    // Flash the button
+    var btn = document.querySelector('.btn-blue');
+    if (btn) {
+      btn.innerHTML = '✅ 已加入待办';
+      setTimeout(function() { btn.innerHTML = '📌 加入待办'; }, 1500);
+    }
+  };
+
+  // ── Follow-up message templates ──
+  var followupTemplates = {
+    en: generateEnglishTemplate(),
+    zh: generateChineseTemplate(),
+    whatsapp: generateWhatsAppTemplate(),
+  };
+
+  function generateEnglishTemplate() {
+    var name = lead.buyerName || 'Sir/Madam';
+    var country = lead.buyerCountry || '';
+    var specs = lead.machineSpecs || '';
+    var lines = [
+      'Dear ' + name + ',',
+      '',
+      'I noticed your inquiry' + (specs ? ' regarding ' + specs : '') + (lead.source ? ' on ' + lead.source : '') + '.',
+      '',
+    ];
+    if (lead.intentScore >= 4) {
+      lines.push('We are a leading manufacturer with extensive export experience' + (country ? ' to ' + country : '') + '. We can provide:');
+      lines.push('- Competitive factory-direct pricing');
+      lines.push('- Customization per your specifications');
+      lines.push('- Full after-sales support and training');
+    } else {
+      lines.push('We specialize in this area and would be happy to discuss your requirements further.');
+    }
+    lines.push('');
+    lines.push('Would you be available for a quick call this week to discuss your needs in detail?');
+    lines.push('');
+    lines.push('Best regards');
+    return lines.join('\n');
+  }
+
+  function generateChineseTemplate() {
+    var name = lead.buyerName || '客户';
+    var specs = lead.machineSpecs || '相关产品';
+    var lines = [
+      '尊敬的 ' + name + '：',
+      '',
+      '您好！我们注意到您' + (lead.source ? '在 ' + lead.source + ' 上' : '') + '关于' + specs + '的采购需求。',
+      '',
+      '我司是专业制造商，具备丰富的出口经验：',
+      '- 工厂直供，价格有竞争力',
+      '- 可根据您的需求定制',
+      '- 提供完善的售后服务和技术支持',
+      '',
+      '请问您方便这周安排一次电话沟通，详细了解您的需求吗？',
+      '',
+      '期待您的回复！',
+    ];
+    return lines.join('\n');
+  }
+
+  function generateWhatsAppTemplate() {
+    var name = lead.buyerName || '';
+    var greeting = name ? 'Hi ' + name + '! ' : 'Hello! ';
+    var specs = lead.machineSpecs || 'your requirements';
+    var lines = [
+      greeting + '👋',
+      '',
+      'I saw your inquiry about ' + specs + (lead.source ? ' on ' + lead.source : '') + '.',
+      '',
+      'We are a direct manufacturer and can offer you:',
+      '✅ Best factory price',
+      '✅ Custom specifications',
+      '✅ Quality guarantee',
+      '',
+      'Can I send you our catalog and price list? 📋',
+    ];
+    return lines.join('\n');
+  }
+
+  var currentTemplateLang = 'en';
+
+  window.showFollowup = function() {
+    var area = document.getElementById('followup-area');
+    if (!area) return;
+    if (area.querySelector('.followup-card')) {
+      area.innerHTML = '';
+      return;
+    }
+    renderFollowup();
+  };
+
+  function renderFollowup() {
+    var area = document.getElementById('followup-area');
+    if (!area) return;
+    var tabs = ['en', 'zh', 'whatsapp'];
+    var tabLabels = { en: 'English', zh: '中文', whatsapp: 'WhatsApp' };
+    var tabsHtml = '';
+    tabs.forEach(function(t) {
+      var active = t === currentTemplateLang ? ' active' : '';
+      tabsHtml += '<button class="followup-tab' + active + '" onclick="switchTemplate(\'' + t + '\')">' + tabLabels[t] + '</button>';
+    });
+    area.innerHTML = '<div class="followup-card">' +
+      '<div class="followup-header">' +
+        '<div class="followup-title">跟进话术模板</div>' +
+        '<button class="followup-close" onclick="document.getElementById(\'followup-area\').innerHTML=\'\'">&times;</button>' +
+      '</div>' +
+      '<div class="followup-tabs">' + tabsHtml + '</div>' +
+      '<div class="followup-text" id="followup-text">' + escHtml(followupTemplates[currentTemplateLang]) + '</div>' +
+      '<div class="followup-actions">' +
+        '<button class="btn btn-green" onclick="copyFollowup()" style="flex:1">📋 复制话术</button>' +
+      '</div>' +
+    '</div>';
+  }
+
+  window.switchTemplate = function(lang) {
+    currentTemplateLang = lang;
+    renderFollowup();
+  };
+
+  window.copyFollowup = function() {
+    var text = followupTemplates[currentTemplateLang];
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(function() {
+        showToast('话术已复制到剪贴板');
+      });
+    } else {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      showToast('话术已复制到剪贴板');
+    }
+  };
+
+  // ── Copy lead info ──
   window.copyLead = function() {
-    const parts = [
-      `[${lead.intentScore}分] ${lead.buyerCountry || '未知'}`,
-      lead.buyerName ? `买家: ${lead.buyerName}` : '',
-      `标题: ${lead.title || ''}`,
-      lead.summaryZh ? `摘要: ${lead.summaryZh}` : '',
-      lead.machineSpecs ? `规格: ${lead.machineSpecs}` : '',
-      `紧迫: ${urgencyZh} | 建议: ${lead.recommendedAction || ''}`,
-      lead.contactInfo ? `联系: ${lead.contactInfo}` : '',
-      sourceUrl ? `来源: ${sourceUrl}` : '',
+    var parts = [
+      '[' + lead.intentScore + '分] ' + (lead.buyerCountry || '未知'),
+      lead.buyerName ? '买家: ' + lead.buyerName : '',
+      '标题: ' + (lead.title || ''),
+      lead.summaryZh ? '摘要: ' + lead.summaryZh : '',
+      lead.machineSpecs ? '规格: ' + lead.machineSpecs : '',
+      '紧迫: ' + urgencyZh + ' | 建议: ' + (lead.recommendedAction || ''),
+      lead.contactInfo ? '联系: ' + lead.contactInfo : '',
+      sourceUrl ? '来源: ' + sourceUrl : '',
     ].filter(Boolean).join('\n');
 
     if (navigator.clipboard) {
-      navigator.clipboard.writeText(parts).then(() => {
-        const btn = document.querySelector('.btn-secondary');
-        btn.textContent = '✅ 已复制';
-        setTimeout(() => btn.innerHTML = '📋 复制信息', 1500);
+      navigator.clipboard.writeText(parts).then(function() {
+        showToast('线索信息已复制');
       });
     } else {
-      const ta = document.createElement('textarea');
+      var ta = document.createElement('textarea');
       ta.value = parts;
       document.body.appendChild(ta);
       ta.select();
       document.execCommand('copy');
       document.body.removeChild(ta);
-      const btn = document.querySelector('.btn-secondary');
-      btn.textContent = '✅ 已复制';
-      setTimeout(() => btn.innerHTML = '📋 复制信息', 1500);
+      showToast('线索信息已复制');
     }
   };
 
