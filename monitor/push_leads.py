@@ -134,7 +134,7 @@ async def push_industry(token: str, industry: str) -> None:
         return
 
     report = format_report(industry, leads)
-    result = send_message(token, report)
+    result = await send_message(token, report)
 
     if result.get("errcode") == 0:
         print(f"[OK] {industry}: {len(leads)} leads pushed successfully")
