@@ -1,9 +1,10 @@
 """
-微信推送模块 — 支持企业微信群机器人和Server酱两种推送方式。
+微信推送模块 — 支持企业微信应用消息、群机器人和Server酱三种推送方式。
 
-企业微信: 设置 WECOM_WEBHOOK_URL 环境变量
-Server酱: 设置 SERVERCHAN_KEY 环境变量
-两者可同时启用。
+企业微信应用消息: 设置 WECOM_CORP_ID + WECOM_AGENT_ID + WECOM_SECRET 环境变量
+企业微信群机器人: 设置 WECOM_WEBHOOK_URL 环境变量
+Server酱:        设置 SERVERCHAN_KEY 环境变量
+三者可同时启用。
 """
 from __future__ import annotations
 
@@ -14,7 +15,10 @@ from typing import Any
 
 import httpx
 
-from monitor.config import WECOM_WEBHOOK_URL, SERVERCHAN_KEY
+from monitor.config import (
+    WECOM_CORP_ID, WECOM_AGENT_ID, WECOM_SECRET,
+    WECOM_WEBHOOK_URL, SERVERCHAN_KEY,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -134,6 +138,77 @@ def _format_plain(report: dict) -> str:
 
 
 # =====================================================================
+#  企业微信应用消息推送 (需要 CorpID + AgentID + Secret)
+# =====================================================================
+
+async def _get_wecom_access_token() -> str | None:
+    """Fetch access_token from WeCom API using corp credentials."""
+    if not (WECOM_CORP_ID and WECOM_SECRET):
+        return None
+    url = (
+        f"https://qyapi.weixin.qq.com/cgi-bin/gettoken"
+        f"?corpid={WECOM_CORP_ID}&corpsecret={WECOM_SECRET}"
+    )
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(url)
+            resp.raise_for_status()
+            data = resp.json()
+            if data.get("errcode") == 0:
+                return data["access_token"]
+            logger.warning("WeCom token error: %s", data)
+            return None
+    except Exception:
+        logger.exception("Failed to get WeCom access_token")
+        return None
+
+
+async def push_wecom_app(report: dict) -> bool:
+    """Push report via WeCom application message API (应用消息).
+
+    Sends to all users (@all). Requires WECOM_CORP_ID, WECOM_AGENT_ID,
+    WECOM_SECRET, and the server IP must be in the app's trusted IP list.
+    """
+    if not (WECOM_CORP_ID and WECOM_AGENT_ID and WECOM_SECRET):
+        logger.debug("WeCom app credentials not set, skipping app push.")
+        return False
+
+    token = await _get_wecom_access_token()
+    if not token:
+        return False
+
+    # App messages use plain text (markdown only works for group bots)
+    content = _format_plain(report)
+
+    # WeCom has 2048 char limit for text messages; truncate if needed
+    if len(content) > 2000:
+        content = content[:1997] + "..."
+
+    payload = {
+        "touser": "@all",
+        "msgtype": "text",
+        "agentid": WECOM_AGENT_ID,
+        "text": {"content": content},
+    }
+
+    send_url = f"https://qyapi.weixin.qq.com/cgi-bin/message/send?access_token={token}"
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(send_url, json=payload)
+            resp.raise_for_status()
+            data = resp.json()
+            if data.get("errcode") == 0:
+                logger.info("WeCom app push succeeded for [%s]", report["industry"])
+                return True
+            else:
+                logger.warning("WeCom app push error: %s", data)
+                return False
+    except Exception:
+        logger.exception("WeCom app push failed")
+        return False
+
+
+# =====================================================================
 #  企业微信群机器人推送
 # =====================================================================
 
@@ -227,8 +302,10 @@ async def notify(
     report = _build_report(industry, leads, source_counts)
 
     results = []
+    if WECOM_CORP_ID and WECOM_AGENT_ID and WECOM_SECRET:
+        results.append(("WeCom应用消息", await push_wecom_app(report)))
     if WECOM_WEBHOOK_URL:
-        results.append(("WeCom", await push_wecom(report)))
+        results.append(("WeCom群机器人", await push_wecom(report)))
     if SERVERCHAN_KEY:
         results.append(("Server酱", await push_serverchan(report)))
 

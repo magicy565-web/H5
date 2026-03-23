@@ -25,7 +25,12 @@ OUTPUT_DIR = BASE_DIR / "monitor" / "output"
 APIFY_API_TOKEN = os.getenv("APIFY_API_TOKEN", "")
 
 # --- 微信推送 ---
-# 企业微信群机器人 Webhook URL（在群设置 → 群机器人 → 添加 → 复制webhook地址）
+# 企业微信应用消息（推荐，管理后台 → 应用管理 → 自建应用）
+WECOM_CORP_ID = os.getenv("WECOM_CORP_ID", "wwde8e07a6f76d2e5c")
+WECOM_AGENT_ID = int(os.getenv("WECOM_AGENT_ID", "1000002"))
+WECOM_SECRET = os.getenv("WECOM_SECRET", "xwOVAUZ71qW2gKpKj7aMvxOQ0_DauFNrrtNH_hrEOu8")
+
+# 企业微信群机器人 Webhook URL（可选，群设置 → 群机器人 → 添加）
 WECOM_WEBHOOK_URL = os.getenv("WECOM_WEBHOOK_URL", "")
 
 # Server酱推送 Key（https://sct.ftqq.com/ 注册获取）
