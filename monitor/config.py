@@ -24,6 +24,13 @@ OUTPUT_DIR = BASE_DIR / "monitor" / "output"
 # --- Apify ---
 APIFY_API_TOKEN = os.getenv("APIFY_API_TOKEN", "")
 
+# --- 微信推送 ---
+# 企业微信群机器人 Webhook URL（在群设置 → 群机器人 → 添加 → 复制webhook地址）
+WECOM_WEBHOOK_URL = os.getenv("WECOM_WEBHOOK_URL", "")
+
+# Server酱推送 Key（https://sct.ftqq.com/ 注册获取）
+SERVERCHAN_KEY = os.getenv("SERVERCHAN_KEY", "")
+
 # --- Analysis ---
 MIN_INTENT_SCORE = 3
 LLM_BATCH_SIZE = 10

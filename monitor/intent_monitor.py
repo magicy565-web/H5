@@ -167,6 +167,13 @@ async def run_monitor(industry: str) -> None:
     # ── 7. Summary ────────────────────────────────────────────────
     _print_summary(industry, start, source_counts, len(new_signals), len(qualified), qualified)
 
+    # ── 8. Push notification ─────────────────────────────────────
+    try:
+        from monitor.notify import notify
+        await notify(industry, all_leads, source_counts)
+    except Exception:
+        logger.exception("Push notification failed (non-fatal)")
+
 
 async def run_all_industries() -> None:
     """Run monitor for all configured industries sequentially."""
