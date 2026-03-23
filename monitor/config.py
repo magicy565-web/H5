@@ -10,7 +10,7 @@ Usage:
 import os
 
 # --- LLM ---
-LLM_API_KEY = os.getenv("DASHSCOPE_API_KEY", "sk-9cd6b877d45c4bb6a29925c2e1dab4b3")
+LLM_API_KEY = os.getenv("DASHSCOPE_API_KEY", "")
 LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
 LLM_MODEL = os.getenv("LLM_MODEL", "qwen-plus")
 LLM_FALLBACK_MODELS = ["qwen-plus", "qwen-turbo", "qwen-long", "qwen-max"]
@@ -26,9 +26,9 @@ APIFY_API_TOKEN = os.getenv("APIFY_API_TOKEN", "")
 
 # --- 微信推送 ---
 # 企业微信应用消息（推荐，管理后台 → 应用管理 → 自建应用）
-WECOM_CORP_ID = os.getenv("WECOM_CORP_ID", "wwde8e07a6f76d2e5c")
-WECOM_AGENT_ID = int(os.getenv("WECOM_AGENT_ID", "1000002"))
-WECOM_SECRET = os.getenv("WECOM_SECRET", "xwOVAUZ71qW2gKpKj7aMvxOQ0_DauFNrrtNH_hrEOu8")
+WECOM_CORP_ID = os.getenv("WECOM_CORP_ID", "")
+WECOM_AGENT_ID = int(os.getenv("WECOM_AGENT_ID", "0"))
+WECOM_SECRET = os.getenv("WECOM_SECRET", "")
 
 # 企业微信群机器人 Webhook URL（可选，群设置 → 群机器人 → 添加）
 WECOM_WEBHOOK_URL = os.getenv("WECOM_WEBHOOK_URL", "")

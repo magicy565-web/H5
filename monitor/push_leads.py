@@ -13,21 +13,20 @@ import json
 import logging
 import sys
 from datetime import datetime
-from pathlib import Path
 
 import httpx
 
-# ── Config ────────────────────────────────────────────────────────────
-CORP_ID = "wwde8e07a6f76d2e5c"
-AGENT_ID = 1000002
-SECRET = "xwOVAUZ71qW2gKpKj7aMvxOQ0_DauFNrrtNH_hrEOu8"
-
-DB_DIR = Path(__file__).resolve().parent.parent / "db"
+from monitor.config import (
+    WECOM_CORP_ID,
+    WECOM_AGENT_ID,
+    WECOM_SECRET,
+    DB_DIR,
+    INDUSTRY_PROFILES,
+)
 
 INDUSTRY_FILES = {
-    "注塑机": "leads_注塑机.json",
-    "家纺": "leads_家纺.json",
-    "家具": "leads_家具.json",
+    name: profile["leads_file"]
+    for name, profile in INDUSTRY_PROFILES.items()
 }
 
 logger = logging.getLogger(__name__)
@@ -37,7 +36,7 @@ logger = logging.getLogger(__name__)
 
 async def get_access_token() -> str:
     """Fetch WeCom access_token."""
-    url = f"https://qyapi.weixin.qq.com/cgi-bin/gettoken?corpid={CORP_ID}&corpsecret={SECRET}"
+    url = f"https://qyapi.weixin.qq.com/cgi-bin/gettoken?corpid={WECOM_CORP_ID}&corpsecret={WECOM_SECRET}"
     async with httpx.AsyncClient(timeout=15) as client:
         resp = await client.get(url)
         data = resp.json()
@@ -107,7 +106,7 @@ async def send_message(token: str, content: str) -> dict:
     payload = {
         "touser": "@all",
         "msgtype": "text",
-        "agentid": AGENT_ID,
+        "agentid": WECOM_AGENT_ID,
         "text": {"content": content},
     }
     url = f"https://qyapi.weixin.qq.com/cgi-bin/message/send?access_token={token}"

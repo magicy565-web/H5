@@ -4,6 +4,7 @@ to score buyer intent and extract structured lead data.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from dataclasses import dataclass
@@ -107,14 +108,17 @@ def _get_user_prompt(count: int, signals_json: str) -> str:
 # ------------------------------------------------------------------
 
 _lead_counter: int = 0
+_lead_counter_lock = asyncio.Lock()
 
 
-def _next_lead_id() -> str:
+async def _next_lead_id() -> str:
     global _lead_counter
-    _lead_counter += 1
+    async with _lead_counter_lock:
+        _lead_counter += 1
+        counter_val = _lead_counter
     date_str = datetime.now(timezone.utc).strftime("%Y%m%d")
     industry_tag = get_active_profile().get("name_en", "unknown")
-    return f"lead-{industry_tag}-{date_str}-{_lead_counter:03d}"
+    return f"lead-{industry_tag}-{date_str}-{counter_val:03d}"
 
 
 # ------------------------------------------------------------------
@@ -169,6 +173,32 @@ class IntentAnalyzer:
         logger.error("All LLM models failed for batch of %d signals.", len(signals))
         return []
 
+    def _match_signal(self, analysis: dict, idx: int, signals: list[RawSignal]) -> RawSignal:
+        """Match an LLM analysis entry back to its original signal.
+
+        Tries to match by title/URL first; falls back to index only if
+        the index is in range.
+        """
+        # Try matching by title or URL from the analysis payload
+        a_title = (analysis.get("title") or "").strip().lower()
+        a_url = (analysis.get("url") or "").strip().lower()
+        if a_title or a_url:
+            for sig in signals:
+                if a_title and sig.title.strip().lower() == a_title:
+                    return sig
+                if a_url and sig.url.strip().lower() == a_url:
+                    return sig
+
+        # Fall back to index-based matching (only if in range)
+        if 0 <= idx < len(signals):
+            return signals[idx]
+
+        # Last resort: return first signal rather than silently mis-matching
+        logger.warning(
+            "Could not match analysis idx=%d to any signal; defaulting to first signal.", idx
+        )
+        return signals[0]
+
     async def _call_llm(
         self,
         model: str,
@@ -198,9 +228,43 @@ class IntentAnalyzer:
             raw_text = raw_text.rsplit("```", 1)[0]
         raw_text = raw_text.strip()
 
-        analyses: list[dict] = json.loads(raw_text)
-        if not isinstance(analyses, list):
-            raise ValueError("LLM response is not a JSON array")
+        try:
+            analyses: list[dict] = json.loads(raw_text)
+            if not isinstance(analyses, list):
+                raise ValueError("LLM response is not a JSON array")
+        except (json.JSONDecodeError, ValueError) as parse_err:
+            logger.warning("JSON parse failed (%s), retrying with stricter prompt …", parse_err)
+            # Retry once with an explicit JSON-only prompt
+            retry_prompt = (
+                "Your previous response was not valid JSON. "
+                "Please return ONLY a valid JSON array, no markdown, no explanation.\n\n"
+                + user_prompt
+            )
+            retry_resp = await self._client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": _get_system_prompt()},
+                    {"role": "user", "content": retry_prompt},
+                ],
+                temperature=0.1,
+                max_tokens=4096,
+            )
+            retry_text = (retry_resp.choices[0].message.content or "").strip()
+            if retry_text.startswith("```"):
+                retry_text = retry_text.split("\n", 1)[-1]
+            if retry_text.endswith("```"):
+                retry_text = retry_text.rsplit("```", 1)[0]
+            retry_text = retry_text.strip()
+            try:
+                analyses = json.loads(retry_text)
+                if not isinstance(analyses, list):
+                    raise ValueError("Retry response is not a JSON array")
+            except (json.JSONDecodeError, ValueError) as retry_err:
+                logger.error(
+                    "JSON parse failed on retry (%s). Creating minimal leads from raw signals.",
+                    retry_err,
+                )
+                return await self._minimal_leads_from_signals(signals)
 
         leads: list[Lead] = []
         now_iso = datetime.now(timezone.utc).isoformat()
@@ -210,12 +274,11 @@ class IntentAnalyzer:
             if score < MIN_INTENT_SCORE:
                 continue
 
-            # Match analysis back to the original signal by index
-            signal = signals[idx] if idx < len(signals) else signals[-1]
+            signal = self._match_signal(analysis, idx, signals)
             country = analysis.get("buyer_country", signal.buyer_country) or "Unknown"
 
             lead = Lead(
-                id=_next_lead_id(),
+                id=await _next_lead_id(),
                 source=signal.source,
                 sourceUrl=signal.url,
                 discoveredAt=now_iso,
@@ -241,6 +304,34 @@ class IntentAnalyzer:
         )
         return leads
 
+    async def _minimal_leads_from_signals(self, signals: list[RawSignal]) -> list[Lead]:
+        """Create minimal leads directly from raw signals when LLM parsing fails entirely."""
+        now_iso = datetime.now(timezone.utc).isoformat()
+        leads: list[Lead] = []
+        for sig in signals:
+            lead = Lead(
+                id=await _next_lead_id(),
+                source=sig.source,
+                sourceUrl=sig.url,
+                discoveredAt=now_iso,
+                title=sig.title,
+                rawText=sig.text[:2000],
+                intentScore=MIN_INTENT_SCORE,
+                buyerCountry=sig.buyer_country or "Unknown",
+                buyerFlag=_flag_for(sig.buyer_country or "Unknown"),
+                buyerName=sig.buyer_name,
+                buyerType="未知",
+                machineSpecs="",
+                urgency="none",
+                summaryZh="LLM解析失败，请人工审核",
+                recommendedAction="持续跟踪",
+                contactInfo=sig.contact_info,
+                contentHash=sig.content_hash,
+            )
+            leads.append(lead)
+        logger.info("Created %d minimal leads from raw signals (LLM fallback).", len(leads))
+        return leads
+
     # ---- process all signals in batches ----
 
     async def analyze_all(self, signals: list[RawSignal]) -> list[Lead]:
@@ -249,12 +340,15 @@ class IntentAnalyzer:
             return []
 
         all_leads: list[Lead] = []
-        for start in range(0, len(signals), LLM_BATCH_SIZE):
+        for i, start in enumerate(range(0, len(signals), LLM_BATCH_SIZE)):
             batch = signals[start : start + LLM_BATCH_SIZE]
             logger.info(
                 "Analysing batch %d–%d of %d signals …",
                 start + 1, start + len(batch), len(signals),
             )
+            # Add 1-second delay between batches to avoid rate limiting
+            if i > 0:
+                await asyncio.sleep(1.0)
             leads = await self.analyze_batch(batch)
             all_leads.extend(leads)
 

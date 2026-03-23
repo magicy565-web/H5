@@ -106,8 +106,18 @@ class RedditCollector(BaseCollector):
     ) -> list[RawSignal]:
         """Fetch and filter new posts from a single subreddit."""
         url = f"https://old.reddit.com/r/{subreddit}/new/.json"
-        resp = await client.get(url, params={"limit": 100})
-        resp.raise_for_status()
+        try:
+            resp = await client.get(url, params={"limit": 100})
+            resp.raise_for_status()
+        except httpx.TimeoutException:
+            logger.warning("Timeout fetching r/%s – skipping.", subreddit)
+            return []
+        except httpx.HTTPStatusError as exc:
+            logger.warning("HTTP %s fetching r/%s – skipping.", exc.response.status_code, subreddit)
+            return []
+        except httpx.RequestError as exc:
+            logger.warning("Request error fetching r/%s: %s – skipping.", subreddit, exc)
+            return []
 
         payload = resp.json()
         children: list[dict[str, Any]] = (

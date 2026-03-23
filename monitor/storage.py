@@ -83,14 +83,22 @@ def append_leads(new_leads: list) -> list[dict]:
     existing = load_leads()
     existing_hashes: set[str] = set()
     for entry in existing:
-        h = entry.get("contentHash") or entry.get("content_hash")
+        h = entry.get("contentHash") or entry.get("content_hash") or ""
         if h:
             existing_hashes.add(h)
 
     added = 0
     for lead in new_leads:
         d = _lead_to_dict(lead)
-        h = d.get("contentHash") or d.get("content_hash")
+        h = d.get("contentHash") or d.get("content_hash") or ""
+        if not h:
+            # No hash available - compute one from url+title as fallback
+            url = d.get("sourceUrl") or d.get("source_url") or d.get("url") or ""
+            title = d.get("title") or ""
+            if url or title:
+                import hashlib
+                h = hashlib.md5(f"{url}|{title}".lower().strip().encode()).hexdigest()[:12]
+                d["contentHash"] = h
         if h and h in existing_hashes:
             continue
         existing.append(d)
@@ -196,9 +204,26 @@ def generate_excel(leads: list[dict], date_str: str, industry: str = "") -> Path
 
     # ── Save ──────────────────────────────────────────────────────
     tag = f"_{industry}" if industry else ""
-    filename = f"采购意向日报{tag}_{date_str}.xlsx"
+    time_str = datetime.now().strftime("%H%M")
+    filename = f"采购意向日报{tag}_{date_str}_{time_str}.xlsx"
     filepath = OUTPUT_DIR / filename
-    wb.save(str(filepath))
+    try:
+        wb.save(str(filepath))
+    except PermissionError:
+        logger.error(
+            "Cannot save Excel report to %s – file may be locked by another process. "
+            "Trying alternative filename …", filepath,
+        )
+        alt_filename = f"采购意向日报{tag}_{date_str}_{time_str}_alt.xlsx"
+        filepath = OUTPUT_DIR / alt_filename
+        try:
+            wb.save(str(filepath))
+        except PermissionError:
+            logger.error("Still cannot save Excel report to %s – giving up.", filepath)
+            return filepath
+    except OSError as exc:
+        logger.error("Failed to save Excel report to %s: %s", filepath, exc)
+        return filepath
     logger.info("Excel report saved to %s (%d rows).", filepath, len(sorted_leads))
     return filepath
 

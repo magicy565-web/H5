@@ -91,8 +91,31 @@ class GoogleSearchCollector(BaseCollector):
         self, client: httpx.AsyncClient, keyword: str
     ) -> list[RawSignal]:
         if self._use_api:
-            return await self._search_api(client, keyword)
-        return await self._search_scrape(client, keyword)
+            return await self._search_with_retry(self._search_api, client, keyword)
+        return await self._search_with_retry(self._search_scrape, client, keyword)
+
+    async def _search_with_retry(
+        self, search_fn, client: httpx.AsyncClient, keyword: str, max_retries: int = 2
+    ) -> list[RawSignal]:
+        """Call search_fn with exponential backoff retry (max 2 retries)."""
+        for attempt in range(max_retries + 1):
+            try:
+                return await search_fn(client, keyword)
+            except Exception as exc:
+                if attempt < max_retries:
+                    delay = 2 ** (attempt + 1)  # 2s, 4s
+                    logger.warning(
+                        "Search attempt %d/%d for %r failed (%s), retrying in %ds …",
+                        attempt + 1, max_retries + 1, keyword, exc, delay,
+                    )
+                    await asyncio.sleep(delay)
+                else:
+                    logger.error(
+                        "All %d search attempts for %r failed: %s",
+                        max_retries + 1, keyword, exc,
+                    )
+                    return []
+        return []  # unreachable but satisfies type checker
 
     # --- Google Custom Search JSON API path ---
 

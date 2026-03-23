@@ -151,14 +151,21 @@ class TradeKeyCollector(BaseCollector):
         signals: list[RawSignal] = []
         now = datetime.now(timezone.utc).isoformat()
 
-        async with httpx.AsyncClient(
-            headers=_HEADERS,
-            timeout=httpx.Timeout(30.0),
-            follow_redirects=True,
-        ) as client:
-            for slug in search_slugs:
-                slug_signals = await self._scrape_slug(client, slug, now)
-                signals.extend(slug_signals)
+        try:
+            async with httpx.AsyncClient(
+                headers=_HEADERS,
+                timeout=httpx.Timeout(30.0),
+                follow_redirects=True,
+            ) as client:
+                for slug in search_slugs:
+                    try:
+                        slug_signals = await self._scrape_slug(client, slug, now)
+                        signals.extend(slug_signals)
+                    except Exception:
+                        logger.exception("TradeKey failed to scrape slug %s", slug)
+        except Exception:
+            logger.exception("TradeKey HTTP client failed, returning empty results")
+            return []
 
         logger.info("TradeKey collector finished: %d signals total.", len(signals))
         return signals

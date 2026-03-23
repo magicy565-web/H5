@@ -1,0 +1,55 @@
+version: "3.8"
+
+services:
+  # ── Monitor: cron-based purchase intent scanner ──────────────────────
+  monitor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: h5-monitor
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./db:/workspace/H5/db
+      - ./monitor/output:/workspace/H5/monitor/output
+    environment:
+      - TZ=Asia/Shanghai
+
+  # ── Server: FastAPI backend ──────────────────────────────────────────
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: h5-server
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./db:/workspace/H5/db
+      - ./monitor/output:/workspace/H5/monitor/output
+    environment:
+      - TZ=Asia/Shanghai
+    entrypoint: ["python", "-m", "uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+  # ── Scheduler: Python-based scheduler (alternative to cron) ─────────
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: h5-scheduler
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "8081:8081"
+    volumes:
+      - ./db:/workspace/H5/db
+      - ./monitor/output:/workspace/H5/monitor/output
+    environment:
+      - TZ=Asia/Shanghai
+    entrypoint: ["python", "-m", "monitor.scheduler"]
+    profiles:
+      - scheduler

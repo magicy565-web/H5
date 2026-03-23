@@ -69,7 +69,7 @@ async def _run_collector(collector: Any) -> list[RawSignal]:
         return []
 
 
-async def run_monitor(industry: str) -> None:
+async def run_monitor(industry: str, dry_run: bool = False) -> None:
     """Main monitoring pipeline for a single industry."""
     # Load industry profile (updates config module globals)
     profile = load_industry(industry)
@@ -168,20 +168,27 @@ async def run_monitor(industry: str) -> None:
     _print_summary(industry, start, source_counts, len(new_signals), len(qualified), qualified)
 
     # ── 8. Push notification ─────────────────────────────────────
-    try:
-        from monitor.notify import notify
-        await notify(industry, all_leads, source_counts)
-    except Exception:
-        logger.exception("Push notification failed (non-fatal)")
+    if dry_run:
+        logger.info("[DRY RUN] Skipping push notification.")
+    else:
+        try:
+            from monitor.notify import notify
+            await notify(industry, all_leads, source_counts)
+        except Exception as notify_err:
+            logger.error(
+                "Push notification failed for [%s]: %s",
+                industry, notify_err,
+                exc_info=True,
+            )
 
 
-async def run_all_industries() -> None:
+async def run_all_industries(dry_run: bool = False) -> None:
     """Run monitor for all configured industries sequentially."""
     industries = list_industries()
     logger.info("Running monitor for %d industries: %s", len(industries), ", ".join(industries))
     for industry in industries:
         try:
-            await run_monitor(industry)
+            await run_monitor(industry, dry_run=dry_run)
         except Exception:
             logger.exception("Failed to run monitor for industry: %s", industry)
         logger.info("")
@@ -246,6 +253,8 @@ def main():
                         help="Industry to monitor (e.g. 注塑机, 家纺, 家具, all)")
     parser.add_argument("--list", "-l", action="store_true",
                         help="List all available industries and exit")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="Collect and analyze but do not push notifications")
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -260,9 +269,9 @@ def main():
         return
 
     if args.industry == "all":
-        asyncio.run(run_all_industries())
+        asyncio.run(run_all_industries(dry_run=args.dry_run))
     else:
-        asyncio.run(run_monitor(args.industry))
+        asyncio.run(run_monitor(args.industry, dry_run=args.dry_run))
 
 
 if __name__ == "__main__":

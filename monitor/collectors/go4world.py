@@ -77,26 +77,30 @@ class Go4WorldBusinessCollector(BaseCollector):
         max_pages = cfg.get("max_pages", 3)
         search_terms = _get_search_terms()
         signals: list[RawSignal] = []
-        async with httpx.AsyncClient(
-            timeout=20.0,
-            follow_redirects=True,
-            headers={
-                "User-Agent": (
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/120.0.0.0 Safari/537.36"
-                ),
-                "Accept": "text/html,application/xhtml+xml",
-                "Accept-Language": "en-US,en;q=0.9",
-            },
-        ) as client:
-            for term in search_terms:
-                url = _BASE_URL.format(term=term)
-                try:
-                    new = await self._scrape_term(client, url, term, max_pages)
-                    signals.extend(new)
-                except Exception:
-                    logger.exception("Failed to scrape term %s", term)
+        try:
+            async with httpx.AsyncClient(
+                timeout=20.0,
+                follow_redirects=True,
+                headers={
+                    "User-Agent": (
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                        "AppleWebKit/537.36 (KHTML, like Gecko) "
+                        "Chrome/120.0.0.0 Safari/537.36"
+                    ),
+                    "Accept": "text/html,application/xhtml+xml",
+                    "Accept-Language": "en-US,en;q=0.9",
+                },
+            ) as client:
+                for term in search_terms:
+                    url = _BASE_URL.format(term=term)
+                    try:
+                        new = await self._scrape_term(client, url, term, max_pages)
+                        signals.extend(new)
+                    except Exception:
+                        logger.exception("Failed to scrape term %s", term)
+        except Exception:
+            logger.exception("go4worldbusiness HTTP client failed, returning empty results")
+            return []
 
         logger.info(
             "go4worldbusiness collected %d raw signals", len(signals)
@@ -139,7 +143,7 @@ class Go4WorldBusinessCollector(BaseCollector):
             # Resolve next page URL.
             url = self._find_next_page(html, url)
 
-            if page < _MAX_PAGES and url is not None:
+            if page < max_pages and url is not None:
                 await asyncio.sleep(REQUEST_DELAY_SECONDS)
 
         return signals

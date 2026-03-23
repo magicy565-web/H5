@@ -25,16 +25,22 @@ class Deduplicator:
         """Load content_hash values from the persistent leads file."""
         from monitor.config import LEADS_FILE
         if not LEADS_FILE.exists():
-            logger.debug("Leads file not found at %s – starting fresh.", LEADS_FILE)
+            logger.debug("Leads file not found at %s – creating empty file.", LEADS_FILE)
+            LEADS_FILE.parent.mkdir(parents=True, exist_ok=True)
+            LEADS_FILE.write_text('{"leads": []}', encoding="utf-8")
             return
 
         try:
             data = json.loads(LEADS_FILE.read_text(encoding="utf-8"))
+            entries = []
             if isinstance(data, list):
-                for entry in data:
-                    h = entry.get("contentHash") or entry.get("content_hash")
-                    if h:
-                        self._seen.add(h)
+                entries = data
+            elif isinstance(data, dict) and isinstance(data.get("leads"), list):
+                entries = data["leads"]
+            for entry in entries:
+                h = entry.get("contentHash") or entry.get("content_hash")
+                if h:
+                    self._seen.add(h)
             logger.info("Loaded %d known hashes from %s.", len(self._seen), LEADS_FILE)
         except (json.JSONDecodeError, OSError) as exc:
             logger.warning("Failed to read leads file: %s", exc)

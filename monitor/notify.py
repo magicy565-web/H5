@@ -22,6 +22,12 @@ from monitor.config import (
 
 logger = logging.getLogger(__name__)
 
+# ── WeCom access token cache ─────────────────────────────────────────
+_wecom_token_cache: dict[str, Any] = {
+    "token": None,
+    "expires_at": 0.0,
+}
+
 
 def _build_report(industry: str, leads: list[dict], source_counts: dict[str, int]) -> dict:
     """Build structured report data from leads."""
@@ -142,9 +148,21 @@ def _format_plain(report: dict) -> str:
 # =====================================================================
 
 async def _get_wecom_access_token() -> str | None:
-    """Fetch access_token from WeCom API using corp credentials."""
+    """Fetch access_token from WeCom API using corp credentials.
+
+    Caches the token and reuses it until 5 minutes before expiry
+    (tokens are valid for 7200 seconds / 2 hours).
+    """
+    import time
+
     if not (WECOM_CORP_ID and WECOM_SECRET):
         return None
+
+    # Return cached token if still valid (with 5-min safety margin)
+    if (_wecom_token_cache["token"]
+            and time.time() < _wecom_token_cache["expires_at"] - 300):
+        return _wecom_token_cache["token"]
+
     url = (
         f"https://qyapi.weixin.qq.com/cgi-bin/gettoken"
         f"?corpid={WECOM_CORP_ID}&corpsecret={WECOM_SECRET}"
@@ -155,6 +173,8 @@ async def _get_wecom_access_token() -> str | None:
             resp.raise_for_status()
             data = resp.json()
             if data.get("errcode") == 0:
+                _wecom_token_cache["token"] = data["access_token"]
+                _wecom_token_cache["expires_at"] = time.time() + data.get("expires_in", 7200)
                 return data["access_token"]
             logger.warning("WeCom token error: %s", data)
             return None
