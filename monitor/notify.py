@@ -42,25 +42,22 @@ def _build_lead_snapshot_url(lead: dict) -> str:
 
     Encodes lead data as base64 JSON in the URL hash fragment.
     The lead.html page reads this and renders a rich detail card.
+    WeCom template_card URL limit is 1024 bytes — keep it tight.
     """
-    # Pick only the fields needed for the detail page.
-    # Use SHORT keys to minimize URL size (WeCom limit ~2048 bytes).
+    # Use minimal keys and aggressive truncation to stay under 1024 bytes
     snapshot = {
-        "i": lead.get("id", ""),                                      # id
-        "t": (lead.get("title") or "")[:80],                          # title
+        "t": (lead.get("title") or "")[:50],                          # title
         "s": lead.get("intentScore", 0),                              # score
         "c": lead.get("buyerCountry", ""),                            # country
-        "n": lead.get("buyerName", ""),                               # name
+        "n": (lead.get("buyerName") or "")[:20],                      # name
         "bt": lead.get("buyerType", ""),                              # buyerType
-        "z": (lead.get("summaryZh") or "")[:120],                     # summaryZh
-        "sp": (lead.get("machineSpecs") or "")[:60],                  # specs
+        "z": (lead.get("summaryZh") or "")[:80],                      # summaryZh
+        "sp": (lead.get("machineSpecs") or "")[:40],                  # specs
         "u": lead.get("urgency", ""),                                 # urgency
         "a": lead.get("recommendedAction", ""),                       # action
-        "ci": lead.get("contactInfo", ""),                            # contact
         "sr": lead.get("source", ""),                                 # source
         "su": lead.get("sourceUrl", "") or lead.get("url", ""),       # sourceUrl
         "d": lead.get("discoveredAt", ""),                            # discoveredAt
-        "r": (lead.get("rawText") or "")[:200],                      # rawText (trimmed)
     }
     # Remove empty values to save space
     snapshot = {k: v for k, v in snapshot.items() if v}
@@ -68,12 +65,15 @@ def _build_lead_snapshot_url(lead: dict) -> str:
     b64 = base64.b64encode(json_str.encode("utf-8")).decode("ascii")
     url = f"{H5_LEAD_URL}#{b64}"
 
-    # Safety check: if still over 2000 chars, drop rawText
-    if len(url) > 2000:
-        snapshot.pop("r", None)
-        json_str = json.dumps(snapshot, ensure_ascii=False, separators=(",", ":"))
-        b64 = base64.b64encode(json_str.encode("utf-8")).decode("ascii")
-        url = f"{H5_LEAD_URL}#{b64}"
+    # Hard limit: if over 1020 chars, progressively drop fields
+    if len(url) > 1020:
+        for drop_key in ["d", "su", "sp"]:
+            snapshot.pop(drop_key, None)
+            json_str = json.dumps(snapshot, ensure_ascii=False, separators=(",", ":"))
+            b64 = base64.b64encode(json_str.encode("utf-8")).decode("ascii")
+            url = f"{H5_LEAD_URL}#{b64}"
+            if len(url) <= 1020:
+                break
 
     return url
 
