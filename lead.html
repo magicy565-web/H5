@@ -129,7 +129,26 @@ body{font-family:var(--font);background:var(--bg);color:var(--text-primary);line
       const hash = location.hash.slice(1);
       if (!hash) return null;
       const json = decodeURIComponent(atob(hash));
-      return JSON.parse(json);
+      const raw = JSON.parse(json);
+      // Support short keys (from compressed URLs) and long keys (legacy)
+      return {
+        id:                raw.id || raw.i || '',
+        title:             raw.title || raw.t || '',
+        intentScore:       raw.intentScore || raw.s || 0,
+        buyerCountry:      raw.buyerCountry || raw.c || '',
+        buyerName:         raw.buyerName || raw.n || '',
+        buyerType:         raw.buyerType || raw.bt || '',
+        summaryZh:         raw.summaryZh || raw.z || '',
+        machineSpecs:      raw.machineSpecs || raw.sp || '',
+        urgency:           raw.urgency || raw.u || '',
+        recommendedAction: raw.recommendedAction || raw.a || '',
+        contactInfo:       raw.contactInfo || raw.ci || '',
+        source:            raw.source || raw.sr || '',
+        sourceUrl:         raw.sourceUrl || raw.su || raw.url || '',
+        discoveredAt:      raw.discoveredAt || raw.d || '',
+        contentHash:       raw.contentHash || '',
+        rawText:           raw.rawText || raw.r || '',
+      };
     } catch(e) {
       console.error('Failed to parse lead data:', e);
       return null;

@@ -43,28 +43,39 @@ def _build_lead_snapshot_url(lead: dict) -> str:
     Encodes lead data as base64 JSON in the URL hash fragment.
     The lead.html page reads this and renders a rich detail card.
     """
-    # Pick only the fields needed for the detail page
+    # Pick only the fields needed for the detail page.
+    # Use SHORT keys to minimize URL size (WeCom limit ~2048 bytes).
     snapshot = {
-        "id": lead.get("id", ""),
-        "title": lead.get("title", ""),
-        "intentScore": lead.get("intentScore", 0),
-        "buyerCountry": lead.get("buyerCountry", ""),
-        "buyerName": lead.get("buyerName", ""),
-        "buyerType": lead.get("buyerType", ""),
-        "summaryZh": lead.get("summaryZh", ""),
-        "machineSpecs": lead.get("machineSpecs", ""),
-        "urgency": lead.get("urgency", ""),
-        "recommendedAction": lead.get("recommendedAction", ""),
-        "contactInfo": lead.get("contactInfo", ""),
-        "source": lead.get("source", ""),
-        "sourceUrl": lead.get("sourceUrl", "") or lead.get("url", ""),
-        "discoveredAt": lead.get("discoveredAt", ""),
-        "contentHash": lead.get("contentHash", ""),
-        "rawText": (lead.get("rawText", "") or "")[:800],  # Truncate to keep URL size manageable
+        "i": lead.get("id", ""),                                      # id
+        "t": (lead.get("title") or "")[:80],                          # title
+        "s": lead.get("intentScore", 0),                              # score
+        "c": lead.get("buyerCountry", ""),                            # country
+        "n": lead.get("buyerName", ""),                               # name
+        "bt": lead.get("buyerType", ""),                              # buyerType
+        "z": (lead.get("summaryZh") or "")[:120],                     # summaryZh
+        "sp": (lead.get("machineSpecs") or "")[:60],                  # specs
+        "u": lead.get("urgency", ""),                                 # urgency
+        "a": lead.get("recommendedAction", ""),                       # action
+        "ci": lead.get("contactInfo", ""),                            # contact
+        "sr": lead.get("source", ""),                                 # source
+        "su": lead.get("sourceUrl", "") or lead.get("url", ""),       # sourceUrl
+        "d": lead.get("discoveredAt", ""),                            # discoveredAt
+        "r": (lead.get("rawText") or "")[:200],                      # rawText (trimmed)
     }
+    # Remove empty values to save space
+    snapshot = {k: v for k, v in snapshot.items() if v}
     json_str = json.dumps(snapshot, ensure_ascii=False, separators=(",", ":"))
     b64 = base64.b64encode(json_str.encode("utf-8")).decode("ascii")
-    return f"{H5_LEAD_URL}#{b64}"
+    url = f"{H5_LEAD_URL}#{b64}"
+
+    # Safety check: if still over 2000 chars, drop rawText
+    if len(url) > 2000:
+        snapshot.pop("r", None)
+        json_str = json.dumps(snapshot, ensure_ascii=False, separators=(",", ":"))
+        b64 = base64.b64encode(json_str.encode("utf-8")).decode("ascii")
+        url = f"{H5_LEAD_URL}#{b64}"
+
+    return url
 
 # ── Urgency / tier classification ────────────────────────────────────
 _URGENCY_TIERS = {
